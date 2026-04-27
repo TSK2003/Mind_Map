@@ -24,7 +24,7 @@
 - Backlink panel and graph traversal.
 - PDF/image/audio/video attachment ingestion.
 
-## Phase 3: AI Second Brain
+## Phase 3: AI Mind Map Agent
 
 - Local Ollama provider.
 - OpenAI-compatible provider interface.
@@ -50,4 +50,3 @@
 - Sync adapter interface.
 - End-to-end tests for vault migrations and file recovery.
 - Signed Windows installer, auto-update, crash reporting, telemetry opt-in.
-

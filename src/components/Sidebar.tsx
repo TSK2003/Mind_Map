@@ -1,9 +1,10 @@
-import { BarChart3, Brain, CalendarDays, FileText, GitBranch, ListChecks, Network, Search, Settings } from 'lucide-react';
+import { BarChart3, CalendarDays, FileText, GitBranch, ListChecks, Network, Search, Settings } from 'lucide-react';
 import clsx from 'clsx';
 import type { WorkspaceView } from '../domain/types';
 import { useBrainStore } from '../store/useBrainStore';
+import logoUrl from '../ic_launcher.png';
 
-const navItems: Array<{ id: WorkspaceView; label: string; icon: typeof Brain }> = [
+const navItems: Array<{ id: WorkspaceView; label: string; icon: typeof Network }> = [
   { id: 'map', label: 'Map', icon: Network },
   { id: 'notes', label: 'Notes', icon: FileText },
   { id: 'graph', label: 'Graph', icon: GitBranch },
@@ -19,7 +20,7 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="brand-mark">
-        <Brain size={24} />
+        <img src={logoUrl} alt="Mind Map" />
       </div>
       <nav className="sidebar-nav" aria-label="Workspace">
         {navItems.map((item) => {
@@ -52,4 +53,3 @@ export function Sidebar() {
     </aside>
   );
 }
-

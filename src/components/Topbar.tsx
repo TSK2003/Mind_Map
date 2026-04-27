@@ -1,6 +1,7 @@
-import { Database, FolderOpen, Moon, Save, Sparkles, Sun } from 'lucide-react';
+import { FolderOpen, Moon, Save, Sparkles, Sun } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useBrainStore } from '../store/useBrainStore';
+import logoUrl from '../ic_launcher.png';
 
 function formatRelativeTime(date: string) {
   return new Intl.DateTimeFormat('en', {
@@ -20,12 +21,14 @@ export function Topbar() {
   const updatedAt = useMemo(() => formatRelativeTime(vault.updatedAt), [vault.updatedAt]);
 
   async function openVault() {
-    if (!window.secondBrain) {
+    const desktopApi = window.mindMap ?? window.secondBrain;
+
+    if (!desktopApi) {
       setStatus('Desktop bridge unavailable');
       return;
     }
 
-    const result = await window.secondBrain.openVault();
+    const result = await desktopApi.openVault();
     if (result) {
       setVault(result.vault, result.path);
       setStatus('Vault opened');
@@ -33,15 +36,17 @@ export function Topbar() {
   }
 
   async function saveVault() {
-    if (!window.secondBrain) {
-      localStorage.setItem('second-brain-os:vault', JSON.stringify(vault));
+    const desktopApi = window.mindMap ?? window.secondBrain;
+
+    if (!desktopApi) {
+      localStorage.setItem('mind-map:vault', JSON.stringify(vault));
       setStatus('Saved in browser storage');
       return;
     }
 
     const result = vaultPath
-      ? await window.secondBrain.saveVault(vaultPath, vault)
-      : await window.secondBrain.saveVaultAs(vault);
+      ? await desktopApi.saveVault(vaultPath, vault)
+      : await desktopApi.saveVaultAs(vault);
 
     if (result) {
       setVault(result.vault, result.path);
@@ -59,7 +64,7 @@ export function Topbar() {
     <header className="topbar">
       <div className="vault-title">
         <div className="vault-icon">
-          <Database size={18} />
+          <img src={logoUrl} alt="Mind Map" />
         </div>
         <div>
           <h1>{vault.name}</h1>
@@ -84,4 +89,3 @@ export function Topbar() {
     </header>
   );
 }
-

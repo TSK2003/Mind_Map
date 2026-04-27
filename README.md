@@ -1,6 +1,6 @@
-# Second Brain OS
+# Mind Map
 
-Second Brain OS is a Windows-first, offline-first personal knowledge operating system that combines structured notes, visual mind maps, backlinks, media storage, project planning, and AI-assisted recall.
+Mind Map is a Windows-first, offline-first personal knowledge operating system that combines visual mind maps, structured notes, backlinks, media storage, project planning, and AI-assisted recall.
 
 This repository contains the production-grade starter scaffold:
 
@@ -34,4 +34,3 @@ npm run package:win
 - `docs/WIREFRAMES.md`
 - `docs/PACKAGING.md`
 - `docs/CODING_STANDARDS.md`
-

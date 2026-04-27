@@ -9,6 +9,8 @@ export function NotesWorkspace() {
   const pages = useBrainStore((state) => state.vault.pages);
   const selectedPageId = useBrainStore((state) => state.selectedPageId);
   const setSelectedPage = useBrainStore((state) => state.setSelectedPage);
+  const createPage = useBrainStore((state) => state.createPage);
+  const openCommandPalette = useBrainStore((state) => state.openCommandPalette);
   const updateSelectedPageContent = useBrainStore((state) => state.updateSelectedPageContent);
   const selectedPage = useMemo(() => pages.find((page) => page.id === selectedPageId) ?? pages[0], [pages, selectedPageId]);
   const content = useMemo(() => (selectedPage ? pageToEditorHtml(selectedPage) : ''), [selectedPage]);
@@ -42,10 +44,10 @@ export function NotesWorkspace() {
         <div className="panel-header">
           <span>Pages</span>
           <div className="mini-actions">
-            <button type="button" title="Search pages" aria-label="Search pages">
+            <button type="button" title="Search pages" aria-label="Search pages" onClick={openCommandPalette}>
               <Search size={15} />
             </button>
-            <button type="button" title="New page" aria-label="New page">
+            <button type="button" title="New page" aria-label="New page" onClick={() => createPage('New Page', 'Start writing your idea here.', ['inbox'])}>
               <Plus size={15} />
             </button>
           </div>
@@ -86,10 +88,10 @@ export function NotesWorkspace() {
           <button type="button" title="Italic" aria-label="Italic" onClick={() => editor?.chain().focus().toggleItalic().run()}>
             <Italic size={17} />
           </button>
-          <button type="button" title="Task list" aria-label="Task list">
+          <button type="button" title="Task list" aria-label="Task list" onClick={() => editor?.chain().focus().insertContent('<p>[ ] New task</p>').run()}>
             <ListTodo size={17} />
           </button>
-          <button type="button" title="Link note" aria-label="Link note">
+          <button type="button" title="Link note" aria-label="Link note" onClick={() => editor?.chain().focus().insertContent('[[Linked note]]').run()}>
             <Link2 size={17} />
           </button>
         </div>
@@ -98,4 +100,3 @@ export function NotesWorkspace() {
     </div>
   );
 }
-

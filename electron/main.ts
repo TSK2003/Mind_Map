@@ -6,7 +6,38 @@ import { fileURLToPath } from 'node:url';
 interface BrainVault {
   name: string;
   updatedAt?: string;
+  pages?: VaultPage[];
+  maps?: VaultMap[];
+  tasks?: VaultTask[];
   [key: string]: unknown;
+}
+
+interface VaultBlock {
+  content?: string;
+}
+
+interface VaultPage {
+  id?: string;
+  title?: string;
+  tags?: string[];
+  blocks?: VaultBlock[];
+}
+
+interface VaultMapNode {
+  data?: {
+    label?: string;
+  };
+}
+
+interface VaultMap {
+  title?: string;
+  nodes?: VaultMapNode[];
+}
+
+interface VaultTask {
+  title?: string;
+  status?: string;
+  priority?: string;
 }
 
 interface VaultFileResult {
@@ -42,30 +73,30 @@ function getWindowIconPath() {
 }
 
 function compactVaultContext(vault: BrainVault) {
-  const pages = Array.isArray(vault.pages) ? vault.pages : [];
-  const maps = Array.isArray(vault.maps) ? vault.maps : [];
-  const tasks = Array.isArray(vault.tasks) ? vault.tasks : [];
+  const pages = vault.pages ?? [];
+  const maps = vault.maps ?? [];
+  const tasks = vault.tasks ?? [];
 
   return JSON.stringify(
     {
       name: vault.name,
-      pages: pages.slice(0, 12).map((page: any) => ({
+      pages: pages.slice(0, 12).map((page) => ({
         id: page.id,
         title: page.title,
         tags: page.tags,
         text: Array.isArray(page.blocks)
           ? page.blocks
-              .map((block: any) => block.content)
+              .map((block) => block.content)
               .filter(Boolean)
               .join(' ')
               .slice(0, 900)
           : '',
       })),
-      maps: maps.slice(0, 4).map((map: any) => ({
+      maps: maps.slice(0, 4).map((map) => ({
         title: map.title,
-        nodes: Array.isArray(map.nodes) ? map.nodes.map((node: any) => node.data?.label).slice(0, 24) : [],
+        nodes: Array.isArray(map.nodes) ? map.nodes.map((node) => node.data?.label).slice(0, 24) : [],
       })),
-      tasks: tasks.slice(0, 12).map((task: any) => ({
+      tasks: tasks.slice(0, 12).map((task) => ({
         title: task.title,
         status: task.status,
         priority: task.priority,
@@ -90,7 +121,7 @@ async function runOllamaAgent(request: AgentRequest): Promise<AgentTextResponse 
     }
 
     const tags = (await tagsResponse.json()) as { models?: Array<{ name: string }> };
-    const model = tags.models?.[0]?.name;
+    const model = tags.models?.find((candidate) => !candidate.name.toLowerCase().includes('embed'))?.name ?? tags.models?.[0]?.name;
 
     if (!model) {
       return null;

@@ -3,15 +3,15 @@ import type { BrainVault } from './types';
 const now = new Date().toISOString();
 
 export const sampleVault: BrainVault = {
-  id: 'vault-personal-os',
-  name: 'Personal Knowledge OS',
+  id: 'vault-mind-map',
+  name: 'Mind Map',
   version: '0.1.0',
   createdAt: now,
   updatedAt: now,
   pages: [
     {
-      id: 'page-second-brain',
-      title: 'Second Brain OS Vision',
+      id: 'page-mind-map',
+      title: 'Mind Map Vision',
       icon: 'Brain',
       tags: ['product', 'strategy', 'ai'],
       createdAt: now,
@@ -25,7 +25,7 @@ export const sampleVault: BrainVault = {
         {
           id: 'block-vision-heading',
           type: 'heading',
-          content: 'Personal Knowledge Operating System',
+            content: 'AI Mind Mapping Knowledge System',
         },
         {
           id: 'block-vision-body',
@@ -48,7 +48,7 @@ export const sampleVault: BrainVault = {
       tags: ['canvas', 'xmind', 'visual-thinking'],
       createdAt: now,
       updatedAt: now,
-      links: ['page-second-brain'],
+      links: ['page-mind-map'],
       metadata: {
         status: 'prototype',
       },
@@ -73,7 +73,7 @@ export const sampleVault: BrainVault = {
       tags: ['rag', 'semantic-search', 'assistant'],
       createdAt: now,
       updatedAt: now,
-      links: ['page-second-brain'],
+      links: ['page-mind-map'],
       metadata: {
         status: 'planned',
       },
@@ -95,7 +95,7 @@ export const sampleVault: BrainVault = {
   maps: [
     {
       id: 'map-product-os',
-      title: 'Second Brain OS Blueprint',
+      title: 'Mind Map Blueprint',
       mode: 'mind-map',
       layout: 'organic',
       updatedAt: now,
@@ -105,8 +105,8 @@ export const sampleVault: BrainVault = {
           type: 'brainNode',
           position: { x: 0, y: 40 },
           data: {
-            label: 'Second Brain OS',
-            noteId: 'page-second-brain',
+            label: 'Mind Map',
+            noteId: 'page-mind-map',
             tone: 'teal',
             summary: 'Unified local-first thinking system',
           },
@@ -117,7 +117,7 @@ export const sampleVault: BrainVault = {
           position: { x: -360, y: -120 },
           data: {
             label: 'Block Notes',
-            noteId: 'page-second-brain',
+            noteId: 'page-mind-map',
             tone: 'amber',
             summary: 'Pages, databases, backlinks, templates',
           },
@@ -177,7 +177,7 @@ export const sampleVault: BrainVault = {
   relationships: [
     {
       id: 'rel-vision-map',
-      sourceId: 'page-second-brain',
+      sourceId: 'page-mind-map',
       targetId: 'page-map-engine',
       type: 'reference',
       strength: 0.9,
@@ -185,7 +185,7 @@ export const sampleVault: BrainVault = {
     },
     {
       id: 'rel-vision-ai',
-      sourceId: 'page-second-brain',
+      sourceId: 'page-mind-map',
       targetId: 'page-ai-memory',
       type: 'reference',
       strength: 0.88,
@@ -195,11 +195,11 @@ export const sampleVault: BrainVault = {
   attachments: [
     {
       id: 'asset-whitepaper',
-      name: 'Second Brain Research Notes.pdf',
+      name: 'Mind Map Research Notes.pdf',
       kind: 'pdf',
       mimeType: 'application/pdf',
-      localPath: 'assets/second-brain-research.pdf',
-      linkedEntityIds: ['page-second-brain'],
+      localPath: 'assets/mind-map-research.pdf',
+      linkedEntityIds: ['page-mind-map'],
       createdAt: now,
     },
   ],
@@ -210,7 +210,7 @@ export const sampleVault: BrainVault = {
       status: 'active',
       priority: 'high',
       dueDate: '2026-05-08',
-      linkedPageIds: ['page-second-brain'],
+      linkedPageIds: ['page-mind-map'],
     },
     {
       id: 'task-editor',
@@ -218,7 +218,7 @@ export const sampleVault: BrainVault = {
       status: 'backlog',
       priority: 'medium',
       dueDate: '2026-05-17',
-      linkedPageIds: ['page-second-brain'],
+      linkedPageIds: ['page-mind-map'],
     },
     {
       id: 'task-rag',
@@ -262,4 +262,3 @@ export const sampleVault: BrainVault = {
     defaultMapLayout: 'organic',
   },
 };
-

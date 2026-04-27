@@ -85,7 +85,7 @@
         "nsis"
       ],
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "icon": "build/icon.ico",
+      "icon": "icon.ico",
       "signAndEditExecutable": false
     },
     "nsis": {

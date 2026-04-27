@@ -25,7 +25,7 @@ interface AgentTextResponse {
   body: string;
 }
 
-const secondBrainApi = {
+const mindMapApi = {
   openVault: () => ipcRenderer.invoke('vault:open') as Promise<VaultFileResult | null>,
   saveVault: (filePath: string, vault: BrainVault) =>
     ipcRenderer.invoke('vault:save', filePath, vault) as Promise<VaultFileResult>,
@@ -34,6 +34,7 @@ const secondBrainApi = {
   runAgent: (request: AgentRequest) => ipcRenderer.invoke('agent:run', request) as Promise<AgentTextResponse>,
 };
 
-contextBridge.exposeInMainWorld('secondBrain', secondBrainApi);
+contextBridge.exposeInMainWorld('secondBrain', mindMapApi);
+contextBridge.exposeInMainWorld('mindMap', mindMapApi);
 
-export type SecondBrainApi = typeof secondBrainApi;
+export type MindMapApi = typeof mindMapApi;

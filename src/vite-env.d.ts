@@ -2,7 +2,7 @@
 
 import type { AgentRequest, AgentTextResponse, BrainVault, VaultFileResult } from './domain/types';
 
-interface SecondBrainApi {
+interface MindMapApi {
   openVault: () => Promise<VaultFileResult | null>;
   saveVault: (filePath: string, vault: BrainVault) => Promise<VaultFileResult>;
   saveVaultAs: (vault: BrainVault) => Promise<VaultFileResult | null>;
@@ -17,6 +17,7 @@ declare module '*.png' {
 
 declare global {
   interface Window {
-    secondBrain?: SecondBrainApi;
+    secondBrain?: MindMapApi;
+    mindMap?: MindMapApi;
   }
 }

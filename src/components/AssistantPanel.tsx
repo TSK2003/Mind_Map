@@ -33,8 +33,9 @@ export function AssistantPanel() {
     setIsThinking(true);
 
     try {
-      const textResponse = window.secondBrain
-        ? await window.secondBrain.runAgent({
+      const desktopApi = window.mindMap ?? window.secondBrain;
+      const textResponse = desktopApi
+        ? await desktopApi.runAgent({
             prompt: trimmed,
             vault,
             selectedPageId,

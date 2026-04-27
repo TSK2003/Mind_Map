@@ -25,7 +25,7 @@ entity_type + entity_id
 
 Examples:
 
-- `page:page-second-brain`
+- `page:page-mind-map`
 - `block:block-vision-body`
 - `map_node:node-ai`
 - `asset:asset-whitepaper`
@@ -49,4 +49,3 @@ Use a rolling snapshot policy:
 - Keep hourly snapshots for 24 hours.
 - Keep daily snapshots for 30 days.
 - Keep user-pinned snapshots indefinitely.
-

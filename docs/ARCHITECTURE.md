@@ -1,8 +1,8 @@
-# Second Brain OS Architecture
+# Mind Map Architecture
 
 ## Recommendation
 
-Use Electron + React + TypeScript for the first commercial Windows release. Tauri is excellent for small binaries and a tighter Rust security boundary, but this product needs a large web UI surface, rich npm ecosystem access, native file operations, local AI process integration, embeddable plugin APIs, and mature Windows installer workflows. Electron is the faster path to a production-grade Windows alpha.
+Use Electron + React + TypeScript for the first commercial Windows release. Tauri is excellent for small binaries and a tighter Rust security boundary, but Mind Map needs a large web UI surface, rich npm ecosystem access, native file operations, local AI process integration, embeddable plugin APIs, and mature Windows installer workflows. Electron is the faster path to a production-grade Windows alpha.
 
 Tauri remains a strong future candidate for a lean Rust-backed edition. Its WebView2 model is attractive, but the Rust/native build burden is higher for a rapid product with heavy editor, graph, AI, and plugin needs.
 
@@ -91,4 +91,3 @@ The starter currently saves `.brain` as readable JSON so the app can open and sa
 - App content security policy blocks remote scripts.
 - AI providers are user-configured and can run fully local.
 - Plugin execution must be permission-gated by manifest.
-

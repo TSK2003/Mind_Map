@@ -105,6 +105,25 @@ button {
   box-shadow: 0 8px 24px rgba(34, 124, 114, 0.12);
 }
 
+.brand-mark img,
+.vault-icon img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.vault-icon img {
+  width: 30px;
+  height: 30px;
+}
+
+button:disabled,
+textarea:disabled {
+  cursor: wait;
+  opacity: 0.64;
+}
+
 .sidebar-nav,
 .sidebar-bottom {
   display: grid;
@@ -389,6 +408,25 @@ button {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+
+.agent-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.agent-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .suggested-actions button {
@@ -849,4 +887,3 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-
