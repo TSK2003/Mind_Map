@@ -65,6 +65,7 @@ interface AgentTextResponse {
 }
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
+const appName = 'Second Brain OS';
 const defaultSystemPrompt =
   'You are the live AI agent inside Mind Map, an offline-first knowledge and mind mapping app. Answer using the supplied vault context. Be concise, practical, and convert the user request into useful next steps.';
 const defaultOllamaBaseUrl = 'http://127.0.0.1:11434';
@@ -389,7 +390,7 @@ function createWindow() {
     height: 920,
     minWidth: 1180,
     minHeight: 740,
-    title: 'Mind Map',
+    title: appName,
     icon: getWindowIconPath(),
     backgroundColor: '#f4f1ea',
     show: false,
@@ -555,7 +556,7 @@ ipcMain.handle('agent:run', async (_event: IpcMainInvokeEvent, request: AgentReq
 });
 
 app.whenReady().then(() => {
-  app.setName('Mind Map');
+  app.setName(appName);
   app.setAppUserModelId('com.aescion.mindmap');
   createWindow();
 

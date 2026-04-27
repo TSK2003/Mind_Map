@@ -1,8 +1,8 @@
 import clsx from 'clsx';
 import { Monitor, Moon, Settings2, Sun } from 'lucide-react';
 import { useEffect } from 'react';
-import type { BrainVault } from '../domain/types';
-import { useBrainStore } from '../store/useBrainStore';
+import type { BrainVault } from '../../domain/types';
+import { useBrainStore } from '../../store/useBrainStore';
 
 const themeOptions: Array<{ value: BrainVault['settings']['theme']; label: string; icon: typeof Sun }> = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -11,29 +11,26 @@ const themeOptions: Array<{ value: BrainVault['settings']['theme']; label: strin
 ];
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
-  const theme = useBrainStore((state) => state.vault.settings.theme);
-  const updateSettings = useBrainStore((state) => state.updateSettings);
+  const theme = useBrainStore((s) => s.vault.settings.theme);
+  const updateSettings = useBrainStore((s) => s.updateSettings);
 
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        onClose();
-      }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
     }
-
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
   return (
     <div className="settings-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(event) => event.stopPropagation()}>
+      <section className="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <div className="settings-title">
             <Settings2 size={18} />
             <div>
               <h2>Workspace Settings</h2>
-              <p>Keep the workspace readable while the MVP core is being stabilized.</p>
+              <p>Configure appearance and workspace preferences.</p>
             </div>
           </div>
           <button className="settings-close" type="button" onClick={onClose}>

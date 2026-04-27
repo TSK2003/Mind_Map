@@ -21,6 +21,11 @@ function blockToHtml(block: PageBlock) {
 }
 
 export function pageToEditorHtml(page: KnowledgePage) {
+  const storedEditorHtml = page.metadata?.editorHtml;
+  if (typeof storedEditorHtml === 'string' && storedEditorHtml.trim()) {
+    return storedEditorHtml;
+  }
+
   return page.blocks.map(blockToHtml).join('');
 }
 
@@ -103,4 +108,30 @@ export function editorHtmlToBlocks(html: string, fallbackTitle = 'Untitled'): Pa
           content: fallbackTitle,
         },
       ];
+}
+
+export function replaceEditorHtmlTitle(html: string, title: string) {
+  const safeTitle = title.trim() || 'Untitled';
+
+  if (typeof document === 'undefined') {
+    if (/<h[1-6][^>]*>.*?<\/h[1-6]>/i.test(html)) {
+      return html.replace(/<h([1-6])[^>]*>.*?<\/h\1>/i, `<h2>${safeTitle}</h2>`);
+    }
+
+    return `<h2>${safeTitle}</h2>${html}`;
+  }
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  const firstHeading = container.querySelector('h1, h2, h3, h4, h5, h6');
+
+  if (firstHeading) {
+    firstHeading.textContent = safeTitle;
+    return container.innerHTML;
+  }
+
+  const heading = document.createElement('h2');
+  heading.textContent = safeTitle;
+  container.prepend(heading);
+  return container.innerHTML;
 }

@@ -1,0 +1,298 @@
+/* ── Notes Editor ────────────────────────────────── */
+
+.notes-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  height: 100%;
+}
+
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px;
+  border-right: 1px solid var(--line);
+  background: var(--panel-bg);
+  overflow: auto;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mini-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.mini-actions button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--muted);
+  transition: all var(--transition-fast);
+}
+
+.mini-actions button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.mini-actions button:active:not(:disabled) {
+  transform: translateY(0) scale(0.94);
+}
+
+.notes-search {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: border-color var(--transition-fast);
+}
+
+.notes-search:focus-within {
+  border-color: var(--teal);
+}
+
+.notes-search input {
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  outline: 0;
+  font-size: 13px;
+}
+
+.page-stack {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.page-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.page-row:hover {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.page-row span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-row.is-selected {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  font-weight: 700;
+}
+
+.page-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+/* ── Editor Pane ─────────────────────────────────── */
+
+.editor-pane {
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.document-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.document-meta-copy {
+  min-width: 0;
+}
+
+.eyebrow {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.document-title-input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  background: transparent;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+  outline: 0;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.document-title-input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(34, 124, 114, 0.12);
+}
+
+.document-meta-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.tag-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.page-delete-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  color: var(--rose);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  transition: all var(--transition-fast);
+}
+
+.page-delete-button:hover:not(:disabled) {
+  border-color: var(--rose);
+  background: var(--rose-soft);
+}
+
+.editor-toolbar {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.editor-toolbar button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  cursor: pointer;
+  color: var(--ink);
+  transition: all var(--transition-fast);
+}
+
+.editor-toolbar button:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.editor-toolbar button:active {
+  transform: translateY(0) scale(0.94);
+}
+
+.rich-editor-surface {
+  min-height: 400px;
+  outline: 0;
+  overflow: auto;
+  padding: 8px 4px 80px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.rich-editor-surface h2 {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 20px 0 10px;
+}
+
+.rich-editor-surface p {
+  margin: 0 0 10px;
+}
+
+/* ── Responsive Notes ────────────────────────────── */
+
+@media (max-width: 900px) {
+  .notes-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .notes-list {
+    display: none;
+  }
+}

@@ -1,6 +1,6 @@
 {
-  "name": "mind-map",
-  "productName": "Mind Map",
+  "name": "mindmap",
+  "productName": "MindMap",
   "version": "0.1.0",
   "description": "Offline-first AI mind mapping and personal knowledge operating system for Windows.",
   "author": "AESCION",

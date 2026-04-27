@@ -1,0 +1,452 @@
+/* ── Canvas: Mind Map Surface ────────────────────── */
+
+.canvas-shell {
+  position: relative;
+  height: 100%;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.canvas-shell.is-panning,
+.canvas-shell.is-panning .canvas-surface {
+  cursor: grabbing;
+}
+
+/* ── Canvas Toolbar ──────────────────────────────── */
+
+.canvas-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100% - 28px);
+}
+
+.canvas-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: var(--brand-shadow);
+  transition: all var(--transition-fast);
+}
+
+.canvas-toolbar button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(34, 124, 114, 0.18);
+}
+
+.canvas-toolbar button:active:not(:disabled) {
+  transform: translateY(0) scale(0.96);
+}
+
+.canvas-toolbar button.is-danger {
+  color: var(--rose);
+}
+
+.canvas-toolbar button.is-danger:disabled {
+  color: var(--muted);
+}
+
+.canvas-toolbar .toolbar-separator {
+  width: 1px;
+  height: 24px;
+  align-self: center;
+  background: var(--line);
+  margin: 0 2px;
+}
+
+/* ── Canvas Status ───────────────────────────────── */
+
+.canvas-status {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  max-width: min(400px, calc(100% - 180px));
+  padding: 0 12px;
+  border: 1px solid var(--teal);
+  border-radius: var(--radius);
+  background: var(--teal-soft);
+  box-shadow: var(--brand-shadow);
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ── Canvas Surface ──────────────────────────────── */
+
+.canvas-surface {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+.canvas-grid,
+.canvas-edge-layer,
+.canvas-node-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.canvas-grid {
+  background-image: radial-gradient(circle, var(--line) 1px, transparent 1px);
+}
+
+.canvas-edge-layer {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.canvas-edge {
+  fill: none;
+  stroke: var(--teal);
+  stroke-opacity: 0.35;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke-opacity var(--transition-fast), stroke-width var(--transition-fast);
+}
+
+.canvas-edge:hover {
+  stroke-opacity: 0.7;
+  stroke-width: 3.5;
+}
+
+.canvas-edge.is-animated {
+  stroke-dasharray: 8 8;
+  stroke-opacity: 0.5;
+  animation: canvas-edge-flow 1.2s linear infinite;
+}
+
+.canvas-node-layer {
+  pointer-events: none;
+}
+
+.canvas-surface.is-dragging-node {
+  cursor: grabbing;
+}
+
+/* ── Node Positioner ─────────────────────────────── */
+
+.canvas-node-positioner {
+  position: absolute;
+  width: 220px;
+  transform-origin: top left;
+  pointer-events: auto;
+}
+
+/* ── Brain Node Card ─────────────────────────────── */
+
+.canvas-node {
+  width: 220px;
+  outline: none;
+  animation: node-entrance 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.brain-node {
+  width: 220px;
+  padding: 14px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  box-shadow: var(--node-shadow);
+  position: relative;
+  transition:
+    border-color var(--transition-normal),
+    box-shadow var(--transition-normal),
+    transform var(--transition-normal);
+}
+
+.brain-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 50px rgba(36, 34, 31, 0.18);
+}
+
+.canvas-node.is-selected .brain-node {
+  border-color: var(--teal);
+  box-shadow:
+    0 0 0 2px var(--teal-soft),
+    0 22px 50px rgba(34, 124, 114, 0.16);
+  transform: translateY(-2px);
+}
+
+/* ── Node Header ─────────────────────────────────── */
+
+.brain-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.brain-node-header > span:first-child {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brain-node p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.node-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+/* ── Node Connection Chip ────────────────────────── */
+
+.node-connection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.node-connection-chip.is-active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal);
+}
+
+/* ── Node Footer ─────────────────────────────────── */
+
+.brain-node-footer {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 10px;
+  animation: fade-in 180ms ease both;
+}
+
+.brain-node-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+  transition: all var(--transition-fast);
+}
+
+.brain-node-action:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.brain-node-action:active {
+  transform: scale(0.94);
+}
+
+/* ── Node Attachment Preview ─────────────────────── */
+
+.node-attachment-preview {
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.node-attachment-preview img {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  display: block;
+}
+
+.node-attachment-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.node-attachment-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Expand / Collapse Button ────────────────────── */
+
+.node-expand-collapse {
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface-strong);
+  color: var(--muted);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all var(--transition-fast);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.canvas-node:hover .node-expand-collapse,
+.canvas-node.is-selected .node-expand-collapse {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.node-expand-collapse:hover {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal);
+  transform: translateY(-50%) scale(1.15);
+  box-shadow: 0 4px 14px rgba(34, 124, 114, 0.2);
+}
+
+.node-expand-collapse:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.node-expand-collapse .child-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--teal);
+  color: white;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(34, 124, 114, 0.3);
+}
+
+/* ── Node Tone Colors ────────────────────────────── */
+
+.tone-teal {
+  border-top: 3px solid var(--teal);
+  background: linear-gradient(180deg, var(--teal-soft), var(--surface-strong) 50%);
+}
+
+.tone-amber {
+  border-top: 3px solid var(--amber);
+  background: linear-gradient(180deg, var(--amber-soft), var(--surface-strong) 50%);
+}
+
+.tone-rose {
+  border-top: 3px solid var(--rose);
+  background: linear-gradient(180deg, var(--rose-soft), var(--surface-strong) 50%);
+}
+
+.tone-violet {
+  border-top: 3px solid var(--violet);
+  background: linear-gradient(180deg, var(--violet-soft), var(--surface-strong) 50%);
+}
+
+.tone-lime {
+  border-top: 3px solid var(--lime);
+  background: linear-gradient(180deg, var(--lime-soft), var(--surface-strong) 50%);
+}
+
+.tone-sky {
+  border-top: 3px solid var(--sky);
+  background: linear-gradient(180deg, var(--sky-soft), var(--surface-strong) 50%);
+}
+
+/* ── Zoom Controls ───────────────────────────────── */
+
+.canvas-zoom-controls {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.canvas-zoom-controls button {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  box-shadow: var(--brand-shadow);
+  cursor: pointer;
+  color: var(--ink);
+  transition: all var(--transition-fast);
+}
+
+.canvas-zoom-controls button:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(34, 124, 114, 0.18);
+}
+
+.canvas-zoom-controls button:active {
+  transform: translateY(0) scale(0.94);
+}

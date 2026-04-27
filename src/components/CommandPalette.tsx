@@ -1,4 +1,4 @@
-import { Command, FileText, GitBranch, ListChecks, Network, Search, Sparkles } from 'lucide-react';
+import { Command, FileText, Network, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { WorkspaceView } from '../domain/types';
 import { useBrainStore } from '../store/useBrainStore';
@@ -6,9 +6,6 @@ import { useBrainStore } from '../store/useBrainStore';
 const commands: Array<{ label: string; view: WorkspaceView; icon: typeof Search }> = [
   { label: 'Open mind map', view: 'map', icon: Network },
   { label: 'Open notes', view: 'notes', icon: FileText },
-  { label: 'Open graph', view: 'graph', icon: GitBranch },
-  { label: 'Open tasks', view: 'tasks', icon: ListChecks },
-  { label: 'Open dashboard', view: 'dashboard', icon: Sparkles },
 ];
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {

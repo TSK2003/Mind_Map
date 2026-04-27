@@ -1,4 +1,4 @@
-import { ChevronsUpDown, FileText, GitBranchPlus, Link2, Trash2 } from 'lucide-react';
+import { ChevronsUpDown, FileText, GitBranch, GitBranchPlus, Link2, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useBrainStore } from '../store/useBrainStore';
 import type { MindNodeData } from '../domain/types';
@@ -20,6 +20,7 @@ export function MapInspector() {
   const addMindNode = useBrainStore((state) => state.addMindNode);
   const updateMindNode = useBrainStore((state) => state.updateMindNode);
   const deleteMindNode = useBrainStore((state) => state.deleteMindNode);
+  const clearMindMap = useBrainStore((state) => state.clearMindMap);
   const createPageFromNode = useBrainStore((state) => state.createPageFromNode);
 
   const selectedNode = useMemo(
@@ -31,6 +32,7 @@ export function MapInspector() {
     [pages, selectedNode?.data.noteId],
   );
   const hasChildren = useMemo(() => map.edges.some((edge) => edge.source === selectedNode?.id), [map.edges, selectedNode?.id]);
+  const canClearMap = map.nodes.length > 1 || map.edges.length > 0;
 
   if (!map || !selectedNode) {
     return null;
@@ -86,6 +88,10 @@ export function MapInspector() {
             <GitBranchPlus size={16} />
             <span>Add child</span>
           </button>
+          <button type="button" disabled={isRootNode} onClick={() => addMindNode('New idea', 'Add details, links, or branch it further.', undefined, 'sibling')}>
+            <GitBranch size={16} />
+            <span>Add sibling</span>
+          </button>
           <button
             type="button"
             disabled={!hasChildren}
@@ -106,9 +112,13 @@ export function MapInspector() {
             <FileText size={16} />
             <span>{linkedPage ? 'Open note' : 'Create note'}</span>
           </button>
-          <button type="button" disabled={isRootNode} onClick={() => deleteMindNode(selectedNode.id)}>
+          <button className="is-danger" type="button" disabled={isRootNode} onClick={() => deleteMindNode(selectedNode.id)}>
             <Trash2 size={16} />
             <span>Delete</span>
+          </button>
+          <button className="is-danger" type="button" disabled={!canClearMap} onClick={clearMindMap}>
+            <Trash2 size={16} />
+            <span>Clear map</span>
           </button>
         </div>
 

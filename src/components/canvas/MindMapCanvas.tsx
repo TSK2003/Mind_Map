@@ -1,0 +1,512 @@
+import { Image, Maximize2, Plus, RotateCcw, Trash2, Waypoints, ZoomIn, ZoomOut } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MindMapEdge, MindMapNode } from '../../domain/types';
+import { useBrainStore } from '../../store/useBrainStore';
+import { BrainNodeCard } from './BrainNodeCard';
+import { fileToDataUrl, pickFile } from './fileUtils';
+
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 120;
+const MIN_ZOOM = 0.35;
+const MAX_ZOOM = 2.0;
+const DEFAULT_NODE_LABEL = 'New idea';
+const DEFAULT_NODE_SUMMARY = 'Add details, links, or branch it further.';
+
+type Viewport = { x: number; y: number; zoom: number };
+type DragState = { nodeId: string; startClientX: number; startClientY: number; originX: number; originY: number };
+type PanState = { startClientX: number; startClientY: number; originX: number; originY: number };
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeWheelDistance(distance: number, deltaMode: number) {
+  if (deltaMode === 1) return distance * 16;
+  if (deltaMode === 2) return distance * 100;
+  return distance;
+}
+
+function createEdgeId() {
+  return `edge-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function toScreenX(worldX: number, vp: Viewport) { return vp.x + worldX * vp.zoom; }
+function toScreenY(worldY: number, vp: Viewport) { return vp.y + worldY * vp.zoom; }
+
+function toWorldPosition(clientX: number, clientY: number, rect: DOMRect, vp: Viewport) {
+  return {
+    x: (clientX - rect.left - vp.x) / vp.zoom,
+    y: (clientY - rect.top - vp.y) / vp.zoom,
+  };
+}
+
+function getNodeBounds(nodes: MindMapNode[]) {
+  if (nodes.length === 0) {
+    return { minX: 0, minY: 0, maxX: NODE_WIDTH, maxY: NODE_HEIGHT };
+  }
+  return nodes.reduce(
+    (b, n) => ({
+      minX: Math.min(b.minX, n.position.x),
+      minY: Math.min(b.minY, n.position.y),
+      maxX: Math.max(b.maxX, n.position.x + NODE_WIDTH),
+      maxY: Math.max(b.maxY, n.position.y + NODE_HEIGHT),
+    }),
+    { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+  );
+}
+
+function collectHiddenNodeIds(nodes: MindMapNode[], edges: MindMapEdge[]) {
+  const collapsed = new Set(nodes.filter((n) => n.data.collapsed).map((n) => n.id));
+  if (collapsed.size === 0) return new Set<string>();
+
+  const childrenBySource = new Map<string, string[]>();
+  edges.forEach((e) => {
+    const children = childrenBySource.get(e.source) ?? [];
+    children.push(e.target);
+    childrenBySource.set(e.source, children);
+  });
+
+  const hidden = new Set<string>();
+  const queue = [...collapsed];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    (childrenBySource.get(id) ?? []).forEach((childId) => {
+      if (!hidden.has(childId)) {
+        hidden.add(childId);
+        queue.push(childId);
+      }
+    });
+  }
+  return hidden;
+}
+
+/** Count direct children of each node via edges */
+function computeChildCounts(edges: MindMapEdge[]) {
+  const counts = new Map<string, number>();
+  edges.forEach((e) => {
+    counts.set(e.source, (counts.get(e.source) ?? 0) + 1);
+  });
+  return counts;
+}
+
+function createEdgePath(source: MindMapNode, target: MindMapNode, vp: Viewport) {
+  const sx = toScreenX(source.position.x + NODE_WIDTH, vp);
+  const sy = toScreenY(source.position.y + NODE_HEIGHT / 2, vp);
+  const ex = toScreenX(target.position.x, vp);
+  const ey = toScreenY(target.position.y + NODE_HEIGHT / 2, vp);
+  const dx = Math.abs(ex - sx);
+  const offset = Math.max(60, dx * 0.4);
+  return `M ${sx} ${sy} C ${sx + offset} ${sy}, ${ex - offset} ${ey}, ${ex} ${ey}`;
+}
+
+export function MindMapCanvas() {
+  const map = useBrainStore((s) => s.vault.maps[0]);
+  const vaultLoadVersion = useBrainStore((s) => s.vaultLoadVersion);
+  const selectedMapNodeId = useBrainStore((s) => s.selectedMapNodeId);
+  const setSelectedMapNode = useBrainStore((s) => s.setSelectedMapNode);
+  const setSelectedPage = useBrainStore((s) => s.setSelectedPage);
+  const addMindNode = useBrainStore((s) => s.addMindNode);
+  const createPageFromNode = useBrainStore((s) => s.createPageFromNode);
+  const updateMapNodes = useBrainStore((s) => s.updateMapNodes);
+  const updateMapEdges = useBrainStore((s) => s.updateMapEdges);
+  const updateMindNode = useBrainStore((s) => s.updateMindNode);
+  const deleteMindNode = useBrainStore((s) => s.deleteMindNode);
+  const clearMindMap = useBrainStore((s) => s.clearMindMap);
+
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<Viewport>({ x: 120, y: 120, zoom: 1 });
+  const mapRef = useRef(map);
+  const lastSelectedRef = useRef<string | undefined>(selectedMapNodeId);
+  const dragRef = useRef<DragState | null>(null);
+  const panRef = useRef<PanState | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingAttachNodeRef = useRef<string | undefined>(undefined);
+
+  const [viewport, setViewport] = useState<Viewport>(viewportRef.current);
+  const [pendingConnectionSourceId, setPendingConnectionSourceId] = useState<string>();
+  const [draggingNodeId, setDraggingNodeId] = useState<string>();
+  const [isPanning, setIsPanning] = useState(false);
+
+  useEffect(() => { viewportRef.current = viewport; }, [viewport]);
+  useEffect(() => { mapRef.current = map; }, [map]);
+
+  const hiddenNodeIds = useMemo(() => collectHiddenNodeIds(map.nodes, map.edges), [map.edges, map.nodes]);
+  const visibleNodes = useMemo(() => map.nodes.filter((n) => !hiddenNodeIds.has(n.id)), [hiddenNodeIds, map.nodes]);
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
+  const visibleEdges = useMemo(
+    () => map.edges.filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)),
+    [map.edges, visibleNodeIds],
+  );
+  const nodeById = useMemo(() => new Map(map.nodes.map((n) => [n.id, n])), [map.nodes]);
+  const childCounts = useMemo(() => computeChildCounts(map.edges), [map.edges]);
+
+  const selectedNode = (selectedMapNodeId ? map.nodes.find((n) => n.id === selectedMapNodeId) : undefined) ?? map.nodes[0];
+  const canDeleteSelected = Boolean(selectedNode && map.nodes[0]?.id !== selectedNode.id);
+  const canClearMap = map.nodes.length > 1 || map.edges.length > 0;
+
+  const fitToNodes = useCallback((nodesToFit: MindMapNode[] = visibleNodes) => {
+    const shell = shellRef.current;
+    if (!shell || nodesToFit.length === 0) return;
+    const rect = shell.getBoundingClientRect();
+    const bounds = getNodeBounds(nodesToFit);
+    const w = Math.max(bounds.maxX - bounds.minX, NODE_WIDTH);
+    const h = Math.max(bounds.maxY - bounds.minY, NODE_HEIGHT);
+    const pad = 72;
+    const zoom = clamp(Math.min((rect.width - pad * 2) / w, (rect.height - pad * 2) / h), MIN_ZOOM, 1.1);
+    setViewport({
+      x: rect.width / 2 - (bounds.minX + w / 2) * zoom,
+      y: rect.height / 2 - (bounds.minY + h / 2) * zoom,
+      zoom,
+    });
+  }, [visibleNodes]);
+
+  const centerOnNode = useCallback((nodeId: string) => {
+    const shell = shellRef.current;
+    const target = mapRef.current.nodes.find((n) => n.id === nodeId);
+    if (!shell || !target) return;
+    const rect = shell.getBoundingClientRect();
+    const z = viewportRef.current.zoom;
+    setViewport((v) => ({
+      ...v,
+      x: rect.width / 2 - (target.position.x + NODE_WIDTH / 2) * z,
+      y: rect.height / 2 - (target.position.y + NODE_HEIGHT / 2) * z,
+    }));
+  }, []);
+
+  const zoomAtPoint = useCallback((nextZoom: number, cx?: number, cy?: number) => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    const rect = shell.getBoundingClientRect();
+    const z = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
+    const fx = cx ?? rect.left + rect.width / 2;
+    const fy = cy ?? rect.top + rect.height / 2;
+    const world = toWorldPosition(fx, fy, rect, viewportRef.current);
+    setViewport({
+      x: fx - rect.left - world.x * z,
+      y: fy - rect.top - world.y * z,
+      zoom: z,
+    });
+  }, []);
+
+  const selectNode = useCallback((id: string) => setSelectedMapNode(id), [setSelectedMapNode]);
+
+  const addNodeAt = useCallback((position: { x: number; y: number }) => {
+    const id = addMindNode(DEFAULT_NODE_LABEL, DEFAULT_NODE_SUMMARY, position);
+    centerOnNode(id);
+  }, [addMindNode, centerOnNode]);
+
+  const addNodeRelativeToSelected = useCallback((nodeId: string, mode: 'child' | 'sibling') => {
+    setSelectedMapNode(nodeId);
+    const id = addMindNode(DEFAULT_NODE_LABEL, DEFAULT_NODE_SUMMARY, undefined, mode);
+    centerOnNode(id);
+  }, [addMindNode, centerOnNode, setSelectedMapNode]);
+
+  const connectNodes = useCallback((sourceId: string, targetId: string) => {
+    if (!sourceId || !targetId || sourceId === targetId) {
+      setPendingConnectionSourceId(undefined);
+      return;
+    }
+    // Bidirectional duplicate check
+    const alreadyConnected = mapRef.current.edges.some(
+      (e) => (e.source === sourceId && e.target === targetId) || (e.source === targetId && e.target === sourceId),
+    );
+    if (!alreadyConnected) {
+      updateMapEdges(mapRef.current.id, [
+        ...mapRef.current.edges,
+        { id: createEdgeId(), source: sourceId, target: targetId, type: 'smoothstep' },
+      ]);
+    }
+    setSelectedMapNode(targetId);
+    setPendingConnectionSourceId(undefined);
+  }, [setSelectedMapNode, updateMapEdges]);
+
+  // Handle file attachment
+  const handleFileSelect = useCallback(async (file: File, nodeId: string) => {
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const attachmentType = file.type.startsWith('image/') ? 'image' as const
+        : file.type === 'application/pdf' ? 'pdf' as const
+        : file.type.startsWith('audio/') ? 'audio' as const
+        : file.type.startsWith('video/') ? 'video' as const
+        : 'document' as const;
+      updateMindNode(nodeId, {
+        attachment: {
+          type: attachmentType,
+          name: file.name,
+          dataUrl,
+          mimeType: file.type,
+        },
+      });
+    } catch {
+      // Silently fail — file too large or unsupported
+    }
+  }, [updateMindNode]);
+
+  const triggerFileInput = useCallback((nodeId: string) => {
+    pendingAttachNodeRef.current = nodeId;
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const nodeId = pendingAttachNodeRef.current;
+    if (file && nodeId) {
+      void handleFileSelect(file, nodeId);
+    }
+    e.target.value = '';
+    pendingAttachNodeRef.current = undefined;
+  }, [handleFileSelect]);
+
+  const addImageNode = useCallback(async () => {
+    const file = await pickFile('image/*');
+    if (!file) return;
+    const shell = shellRef.current;
+    if (!shell) return;
+    const rect = shell.getBoundingClientRect();
+    const pos = toWorldPosition(rect.left + rect.width / 2, rect.top + rect.height / 2, rect, viewportRef.current);
+    const id = addMindNode(file.name.replace(/\.[^.]+$/, ''), '', pos);
+    await handleFileSelect(file, id);
+    centerOnNode(id);
+  }, [addMindNode, centerOnNode, handleFileSelect]);
+
+  // Fit on vault load
+  useEffect(() => {
+    const frameId = requestAnimationFrame(() => fitToNodes());
+    return () => cancelAnimationFrame(frameId);
+  }, [fitToNodes, vaultLoadVersion]);
+
+  // Center on selected node change
+  useEffect(() => {
+    if (!selectedMapNodeId) { lastSelectedRef.current = selectedMapNodeId; return; }
+    if (lastSelectedRef.current !== selectedMapNodeId) centerOnNode(selectedMapNodeId);
+    lastSelectedRef.current = selectedMapNodeId;
+  }, [centerOnNode, selectedMapNodeId]);
+
+  // Clean up stale pending connections
+  useEffect(() => {
+    if (pendingConnectionSourceId && !nodeById.has(pendingConnectionSourceId)) {
+      setPendingConnectionSourceId(undefined);
+    }
+  }, [nodeById, pendingConnectionSourceId]);
+
+  // Pointer move / up for drag & pan
+  useEffect(() => {
+    function handlePointerMove(e: PointerEvent) {
+      if (dragRef.current) {
+        const vp = viewportRef.current;
+        const nx = dragRef.current.originX + (e.clientX - dragRef.current.startClientX) / vp.zoom;
+        const ny = dragRef.current.originY + (e.clientY - dragRef.current.startClientY) / vp.zoom;
+        const nextNodes = mapRef.current.nodes.map((n) =>
+          n.id === dragRef.current?.nodeId ? { ...n, position: { x: nx, y: ny } } : n,
+        );
+        updateMapNodes(mapRef.current.id, nextNodes);
+      }
+      if (panRef.current) {
+        setViewport({
+          x: panRef.current.originX + (e.clientX - panRef.current.startClientX),
+          y: panRef.current.originY + (e.clientY - panRef.current.startClientY),
+          zoom: viewportRef.current.zoom,
+        });
+      }
+    }
+    function handlePointerUp() {
+      dragRef.current = null;
+      panRef.current = null;
+      setDraggingNodeId(undefined);
+      setIsPanning(false);
+    }
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [updateMapNodes]);
+
+  return (
+    <div className={isPanning ? 'canvas-shell is-panning' : 'canvas-shell'} ref={shellRef}>
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,application/pdf,audio/*,video/*,.doc,.docx,.txt,.md"
+        style={{ display: 'none' }}
+        onChange={onFileInputChange}
+      />
+
+      {/* Canvas Toolbar */}
+      <div className="canvas-toolbar" aria-label="Mind map tools">
+        <button type="button" title="Add node" aria-label="Add node" onClick={() => {
+          const shell = shellRef.current;
+          if (!shell) return;
+          const rect = shell.getBoundingClientRect();
+          addNodeAt(toWorldPosition(rect.left + rect.width / 2, rect.top + rect.height / 2, rect, viewportRef.current));
+        }}>
+          <Plus size={15} />
+          <span>Node</span>
+        </button>
+        <button type="button" title="Add image node" aria-label="Add image node" onClick={() => void addImageNode()}>
+          <Image size={15} />
+          <span>Image</span>
+        </button>
+        <span className="toolbar-separator" />
+        <button type="button" title="Fit canvas" aria-label="Fit canvas" onClick={() => fitToNodes()}>
+          <Maximize2 size={15} />
+          <span>Fit</span>
+        </button>
+        <span className="toolbar-separator" />
+        <button className="is-danger" type="button" title="Delete selected" aria-label="Delete selected" disabled={!canDeleteSelected}
+          onClick={() => { if (selectedNode) deleteMindNode(selectedNode.id); }}
+        >
+          <Trash2 size={15} />
+          <span>Delete</span>
+        </button>
+        <button className="is-danger" type="button" title="Clear map" aria-label="Clear map" disabled={!canClearMap}
+          onClick={() => { clearMindMap(); requestAnimationFrame(() => fitToNodes(mapRef.current.nodes)); }}
+        >
+          <RotateCcw size={15} />
+          <span>Clear</span>
+        </button>
+      </div>
+
+      {/* Connection status */}
+      {pendingConnectionSourceId ? (
+        <div className="canvas-status">
+          <Waypoints size={14} />
+          <span>
+            Connecting from {nodeById.get(pendingConnectionSourceId)?.data.label ?? 'node'}. Click target to finish.
+          </span>
+        </div>
+      ) : null}
+
+      {/* Canvas surface */}
+      <div
+        className={draggingNodeId ? 'canvas-surface is-dragging-node' : 'canvas-surface'}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          const t = e.target as HTMLElement | null;
+          if (t?.closest('.canvas-node, .canvas-toolbar, .canvas-zoom-controls')) return;
+          panRef.current = {
+            startClientX: e.clientX, startClientY: e.clientY,
+            originX: viewportRef.current.x, originY: viewportRef.current.y,
+          };
+          setIsPanning(true);
+          setPendingConnectionSourceId(undefined);
+        }}
+        onDoubleClick={(e) => {
+          const t = e.target as HTMLElement | null;
+          if (t?.closest('.canvas-node, .canvas-toolbar, .canvas-zoom-controls')) return;
+          const shell = shellRef.current;
+          if (!shell) return;
+          addNodeAt(toWorldPosition(e.clientX, e.clientY, shell.getBoundingClientRect(), viewportRef.current));
+        }}
+        onWheel={(e) => {
+          e.preventDefault();
+          const dx = normalizeWheelDistance(e.deltaX, e.deltaMode);
+          const dy = normalizeWheelDistance(e.deltaY, e.deltaMode);
+          if (e.ctrlKey || e.metaKey) {
+            zoomAtPoint(viewportRef.current.zoom * Math.exp(-dy * 0.003), e.clientX, e.clientY);
+            return;
+          }
+          setViewport((v) => ({ ...v, x: v.x - dx, y: v.y - dy }));
+        }}
+      >
+        {/* Dot grid background */}
+        <div
+          className="canvas-grid"
+          style={{
+            backgroundPosition: `${viewport.x}px ${viewport.y}px`,
+            backgroundSize: `${24 * viewport.zoom}px ${24 * viewport.zoom}px`,
+          }}
+        />
+
+        {/* Edge layer */}
+        <svg className="canvas-edge-layer" aria-hidden="true">
+          {visibleEdges.map((edge) => {
+            const source = nodeById.get(edge.source);
+            const target = nodeById.get(edge.target);
+            if (!source || !target) return null;
+            return (
+              <path
+                key={edge.id}
+                d={createEdgePath(source, target, viewport)}
+                className={edge.animated ? 'canvas-edge is-animated' : 'canvas-edge'}
+              />
+            );
+          })}
+        </svg>
+
+        {/* Node layer */}
+        <div className="canvas-node-layer">
+          {visibleNodes.map((node) => (
+            <div
+              key={node.id}
+              className="canvas-node-positioner"
+              style={{
+                left: toScreenX(node.position.x, viewport),
+                top: toScreenY(node.position.y, viewport),
+                transform: `scale(${viewport.zoom})`,
+              }}
+            >
+              <BrainNodeCard
+                node={node}
+                isSelected={selectedNode?.id === node.id}
+                isPendingConnection={pendingConnectionSourceId === node.id}
+                childCount={childCounts.get(node.id) ?? 0}
+                onPointerDown={(e) => {
+                  const t = e.target as HTMLElement | null;
+                  if (e.button !== 0 || t?.closest('button, input, textarea, a')) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectNode(node.id);
+                  dragRef.current = {
+                    nodeId: node.id,
+                    startClientX: e.clientX, startClientY: e.clientY,
+                    originX: node.position.x, originY: node.position.y,
+                  };
+                  setDraggingNodeId(node.id);
+                }}
+                onSelect={() => {
+                  if (pendingConnectionSourceId && pendingConnectionSourceId !== node.id) {
+                    connectNodes(pendingConnectionSourceId, node.id);
+                    return;
+                  }
+                  selectNode(node.id);
+                }}
+                onOpenNote={() => { if (node.data.noteId) setSelectedPage(node.data.noteId); }}
+                onCreateNote={() => {
+                  const pageId = createPageFromNode(node.id);
+                  if (pageId) setSelectedPage(pageId);
+                }}
+                onAddChild={() => addNodeRelativeToSelected(node.id, 'child')}
+                onStartConnection={() => {
+                  selectNode(node.id);
+                  setPendingConnectionSourceId((s) => (s === node.id ? undefined : node.id));
+                }}
+                onToggleCollapse={() => {
+                  updateMindNode(node.id, { collapsed: !node.data.collapsed });
+                }}
+                onAttachFile={() => triggerFileInput(node.id)}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Zoom controls */}
+      <div className="canvas-zoom-controls" aria-label="Canvas zoom controls">
+        <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => zoomAtPoint(viewport.zoom * 1.15)}>
+          <ZoomIn size={16} />
+        </button>
+        <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => zoomAtPoint(viewport.zoom * 0.85)}>
+          <ZoomOut size={16} />
+        </button>
+        <button type="button" title="Fit canvas" aria-label="Fit canvas" onClick={() => fitToNodes()}>
+          <Maximize2 size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}

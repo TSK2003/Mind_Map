@@ -1,0 +1,221 @@
+/* ── Command Palette ──────────────────────────────── */
+
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: start center;
+  padding-top: 12vh;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fade-in 150ms ease both;
+}
+
+.command-palette {
+  width: min(580px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: dialog-entrance 200ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.palette-input {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.palette-input input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.palette-results {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  max-height: 340px;
+  overflow: auto;
+}
+
+.palette-results button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  transition: all var(--transition-fast);
+}
+
+.palette-results button:hover {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.palette-results button:active {
+  transform: scale(0.98);
+}
+
+/* ── Settings Dialog ─────────────────────────────── */
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fade-in 150ms ease both;
+}
+
+.settings-panel {
+  width: min(680px, calc(100vw - 32px));
+  display: grid;
+  gap: 18px;
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+  animation: dialog-entrance 200ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-title {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.settings-title h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.settings-title p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.settings-close:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.settings-group {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-group h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.settings-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.settings-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.settings-option:hover {
+  border-color: var(--line-strong);
+}
+
+.settings-option.is-active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-weight: 700;
+}
+
+/* ── Responsive Dialogs ──────────────────────────── */
+
+@media (max-width: 1180px) {
+  .settings-field-grid {
+    grid-template-columns: 1fr;
+  }
+}

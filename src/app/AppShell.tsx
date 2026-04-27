@@ -1,14 +1,16 @@
 import { lazy, Suspense } from 'react';
-import { MindMapCanvas } from './MindMapCanvas';
-import { Sidebar } from './Sidebar';
-import { Topbar } from './Topbar';
+import { MindMapCanvas } from '../components/canvas/MindMapCanvas';
+import { Sidebar } from '../components/layout/Sidebar';
+import { Topbar } from '../components/layout/Topbar';
 import { useBrainStore } from '../store/useBrainStore';
-import { WorkspacePanel } from './WorkspacePanel';
+import { WorkspacePanel } from '../components/inspector/WorkspacePanel';
 
-const NotesWorkspace = lazy(async () => ({ default: (await import('./NotesWorkspace')).NotesWorkspace }));
+const NotesWorkspace = lazy(async () => ({
+  default: (await import('../components/editor/NotesWorkspace')).NotesWorkspace,
+}));
 
 export function AppShell() {
-  const activeView = useBrainStore((state) => state.activeView);
+  const activeView = useBrainStore((s) => s.activeView);
 
   return (
     <main className="app-shell">
@@ -19,7 +21,7 @@ export function AppShell() {
           <section className="primary-pane">
             {activeView === 'map' ? <MindMapCanvas /> : null}
             {activeView === 'notes' ? (
-              <Suspense fallback={<div className="view-loading">Loading notes workspace...</div>}>
+              <Suspense fallback={<div className="view-loading">Loading notes workspace…</div>}>
                 <NotesWorkspace />
               </Suspense>
             ) : null}

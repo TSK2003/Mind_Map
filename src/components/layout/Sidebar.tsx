@@ -1,19 +1,19 @@
 import { FileText, Network, Search, Settings } from 'lucide-react';
 import clsx from 'clsx';
-import type { WorkspaceView } from '../domain/types';
-import { useBrainStore } from '../store/useBrainStore';
-import logoUrl from '../ic_launcher.png';
+import type { WorkspaceView } from '../../domain/types';
+import { useBrainStore } from '../../store/useBrainStore';
+import logoUrl from '../../assets/ic_launcher.png';
 
 const navItems: Array<{ id: WorkspaceView; label: string; icon: typeof Network }> = [
-  { id: 'map', label: 'Map', icon: Network },
+  { id: 'map', label: 'Mind Map', icon: Network },
   { id: 'notes', label: 'Notes', icon: FileText },
 ];
 
 export function Sidebar() {
-  const activeView = useBrainStore((state) => state.activeView);
-  const setActiveView = useBrainStore((state) => state.setActiveView);
-  const openCommandPalette = useBrainStore((state) => state.openCommandPalette);
-  const openSettings = useBrainStore((state) => state.openSettings);
+  const activeView = useBrainStore((s) => s.activeView);
+  const setActiveView = useBrainStore((s) => s.setActiveView);
+  const openCommandPalette = useBrainStore((s) => s.openCommandPalette);
+  const openSettings = useBrainStore((s) => s.openSettings);
 
   return (
     <aside className="sidebar">
@@ -38,7 +38,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="sidebar-bottom">
-        <button className="icon-button sidebar-button" type="button" title="Search" aria-label="Search" onClick={openCommandPalette}>
+        <button className="icon-button sidebar-button" type="button" title="Search (Ctrl+K)" aria-label="Search" onClick={openCommandPalette}>
           <Search size={20} />
         </button>
         <button className="icon-button sidebar-button" type="button" title="Settings" aria-label="Settings" onClick={openSettings}>

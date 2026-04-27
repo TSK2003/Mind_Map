@@ -34,6 +34,13 @@ export interface KnowledgePage {
   metadata: Record<string, string | number | boolean>;
 }
 
+export interface NodeAttachment {
+  type: 'image' | 'pdf' | 'audio' | 'video' | 'document';
+  name: string;
+  dataUrl: string;
+  mimeType: string;
+}
+
 export interface MindNodeData {
   [key: string]: unknown;
   label: string;
@@ -41,6 +48,7 @@ export interface MindNodeData {
   tone: 'teal' | 'amber' | 'rose' | 'violet' | 'lime' | 'sky';
   summary?: string;
   collapsed?: boolean;
+  attachment?: NodeAttachment;
 }
 
 export interface MindMapNode {
