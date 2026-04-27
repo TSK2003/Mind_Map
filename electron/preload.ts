@@ -38,6 +38,10 @@ const mindMapApi = {
   saveVaultAs: (vault: BrainVault) => ipcRenderer.invoke('vault:saveAs', vault) as Promise<VaultFileResult | null>,
   getUserDataPath: () => ipcRenderer.invoke('app:getUserDataPath') as Promise<string>,
   runAgent: (request: AgentRequest) => ipcRenderer.invoke('agent:run', request) as Promise<AgentTextResponse>,
+  onMenuAction: (channel: string, callback: () => void) => {
+    ipcRenderer.on(channel, callback);
+    return () => { ipcRenderer.removeListener(channel, callback); };
+  },
 };
 
 contextBridge.exposeInMainWorld('secondBrain', mindMapApi);

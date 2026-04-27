@@ -1,4 +1,4 @@
-import { ChevronsUpDown, FileText, GitBranch, GitBranchPlus, Image, Link2, Trash2 } from 'lucide-react';
+import { ChevronsUpDown, FileText, GitBranch, GitBranchPlus, Image, Link2, Trash2, Unlink, X } from 'lucide-react';
 import { useCallback, useMemo, useRef } from 'react';
 import { useBrainStore } from '../../store/useBrainStore';
 import type { MindNodeData } from '../../domain/types';
@@ -23,6 +23,7 @@ export function MapInspector() {
   const deleteMindNode = useBrainStore((s) => s.deleteMindNode);
   const clearMindMap = useBrainStore((s) => s.clearMindMap);
   const createPageFromNode = useBrainStore((s) => s.createPageFromNode);
+  const updateMapEdges = useBrainStore((s) => s.updateMapEdges);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedNode = useMemo(
@@ -38,6 +39,10 @@ export function MapInspector() {
     [map.edges, selectedNode?.id],
   );
   const canClearMap = map.nodes.length > 1 || map.edges.length > 0;
+  const hasParentEdge = useMemo(
+    () => map.edges.some((e) => e.target === selectedNode?.id),
+    [map.edges, selectedNode?.id],
+  );
 
   const handleFileAttach = useCallback(async (file: File) => {
     if (!selectedNode) return;
@@ -147,7 +152,7 @@ export function MapInspector() {
         </div>
 
         {selectedNode.data.attachment ? (
-          <div className="node-attachment-preview" style={{ marginTop: 0 }}>
+          <div className="node-attachment-preview" style={{ marginTop: 0, position: 'relative' }}>
             {selectedNode.data.attachment.type === 'image' ? (
               <img src={selectedNode.data.attachment.dataUrl} alt={selectedNode.data.attachment.name} style={{ height: '100px' }} />
             ) : (
@@ -155,7 +160,30 @@ export function MapInspector() {
                 <span>{selectedNode.data.attachment.name}</span>
               </div>
             )}
+            <button
+              className="attachment-delete-btn"
+              type="button"
+              title="Remove attachment"
+              onClick={() => updateMindNode(selectedNode.id, { attachment: undefined })}
+            >
+              <X size={12} />
+            </button>
           </div>
+        ) : null}
+
+        {hasParentEdge ? (
+          <button
+            className="linked-note-row"
+            type="button"
+            style={{ color: 'var(--rose)' }}
+            onClick={() => {
+              const updatedEdges = map.edges.filter((e) => e.target !== selectedNode.id);
+              updateMapEdges(map.id, updatedEdges);
+            }}
+          >
+            <Unlink size={14} />
+            <span>Disconnect from parent</span>
+          </button>
         ) : null}
 
         {linkedPage ? (

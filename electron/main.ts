@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, type BrowserWindow as BrowserWindowType, type IpcMainInvokeEvent, type OpenDialogOptions, type SaveDialogOptions } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, shell, type BrowserWindow as BrowserWindowType, type IpcMainInvokeEvent, type OpenDialogOptions, type SaveDialogOptions } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -65,7 +65,7 @@ interface AgentTextResponse {
 }
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
-const appName = 'Second Brain OS';
+const appName = 'MindMap';
 const defaultSystemPrompt =
   'You are the live AI agent inside Mind Map, an offline-first knowledge and mind mapping app. Answer using the supplied vault context. Be concise, practical, and convert the user request into useful next steps.';
 const defaultOllamaBaseUrl = 'http://127.0.0.1:11434';
@@ -417,6 +417,107 @@ function createWindow() {
   } else {
     void mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
+
+  // Build application menu
+  const isMac = process.platform === 'darwin';
+  const menuTemplate: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Project',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => mainWindow?.webContents.send('menu:new-project'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Open Vault…',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => mainWindow?.webContents.send('menu:open-vault'),
+        },
+        {
+          label: 'Save Vault',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => mainWindow?.webContents.send('menu:save-vault'),
+        },
+        {
+          label: 'Save As…',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => mainWindow?.webContents.send('menu:save-vault-as'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Open Data Folder',
+          click: () => void shell.openPath(app.getPath('userData')),
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit', label: 'Exit' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Toggle Theme',
+          accelerator: 'CmdOrCtrl+T',
+          click: () => mainWindow?.webContents.send('menu:toggle-theme'),
+        },
+        {
+          label: 'Fit Canvas',
+          accelerator: 'CmdOrCtrl+0',
+          click: () => mainWindow?.webContents.send('menu:fit-canvas'),
+        },
+        { type: 'separator' },
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac ? [{ type: 'separator' as const }, { role: 'front' as const }] : [{ role: 'close' as const }]),
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'About MindMap',
+          click: () => {
+            void dialog.showMessageBox({
+              type: 'info',
+              title: 'About MindMap',
+              message: 'MindMap v0.1.0',
+              detail: 'Offline-first AI mind mapping and personal knowledge system.\nBuilt by AESCION.',
+            });
+          },
+        },
+      ],
+    },
+  ];
+  const menu = Menu.buildFromTemplate(menuTemplate);
+  Menu.setApplicationMenu(menu);
 }
 
 async function readVault(filePath: string): Promise<VaultFileResult> {

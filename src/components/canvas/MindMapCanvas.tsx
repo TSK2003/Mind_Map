@@ -139,6 +139,11 @@ export function MindMapCanvas() {
   );
   const nodeById = useMemo(() => new Map(map.nodes.map((n) => [n.id, n])), [map.nodes]);
   const childCounts = useMemo(() => computeChildCounts(map.edges), [map.edges]);
+  const parentEdgeMap = useMemo(() => {
+    const m = new Map<string, string>();
+    map.edges.forEach((e) => m.set(e.target, e.source));
+    return m;
+  }, [map.edges]);
 
   const selectedNode = (selectedMapNodeId ? map.nodes.find((n) => n.id === selectedMapNodeId) : undefined) ?? map.nodes[0];
   const canDeleteSelected = Boolean(selectedNode && map.nodes[0]?.id !== selectedNode.id);
@@ -220,6 +225,27 @@ export function MindMapCanvas() {
     setPendingConnectionSourceId(undefined);
   }, [setSelectedMapNode, updateMapEdges]);
 
+  // Disconnect a node from its parent (remove the edge)
+  const disconnectFromParent = useCallback((nodeId: string) => {
+    const currentMap = mapRef.current;
+    const updatedEdges = currentMap.edges.filter(
+      (e) => !(e.target === nodeId),
+    );
+    updateMapEdges(currentMap.id, updatedEdges);
+  }, [updateMapEdges]);
+
+  // Delete a specific edge by id
+  const deleteEdge = useCallback((edgeId: string) => {
+    const currentMap = mapRef.current;
+    const updatedEdges = currentMap.edges.filter((e) => e.id !== edgeId);
+    updateMapEdges(currentMap.id, updatedEdges);
+  }, [updateMapEdges]);
+
+  // Delete attachment from a node
+  const deleteAttachment = useCallback((nodeId: string) => {
+    updateMindNode(nodeId, { attachment: undefined });
+  }, [updateMindNode]);
+
   // Handle file attachment
   const handleFileSelect = useCallback(async (file: File, nodeId: string) => {
     try {
@@ -289,27 +315,32 @@ export function MindMapCanvas() {
     }
   }, [nodeById, pendingConnectionSourceId]);
 
-  // Pointer move / up for drag & pan
+  // Pointer move / up for drag & pan — throttled to rAF for smooth 60fps
   useEffect(() => {
+    let rafId = 0;
     function handlePointerMove(e: PointerEvent) {
-      if (dragRef.current) {
-        const vp = viewportRef.current;
-        const nx = dragRef.current.originX + (e.clientX - dragRef.current.startClientX) / vp.zoom;
-        const ny = dragRef.current.originY + (e.clientY - dragRef.current.startClientY) / vp.zoom;
-        const nextNodes = mapRef.current.nodes.map((n) =>
-          n.id === dragRef.current?.nodeId ? { ...n, position: { x: nx, y: ny } } : n,
-        );
-        updateMapNodes(mapRef.current.id, nextNodes);
-      }
-      if (panRef.current) {
-        setViewport({
-          x: panRef.current.originX + (e.clientX - panRef.current.startClientX),
-          y: panRef.current.originY + (e.clientY - panRef.current.startClientY),
-          zoom: viewportRef.current.zoom,
-        });
-      }
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (dragRef.current) {
+          const vp = viewportRef.current;
+          const nx = dragRef.current.originX + (e.clientX - dragRef.current.startClientX) / vp.zoom;
+          const ny = dragRef.current.originY + (e.clientY - dragRef.current.startClientY) / vp.zoom;
+          const nextNodes = mapRef.current.nodes.map((n) =>
+            n.id === dragRef.current?.nodeId ? { ...n, position: { x: nx, y: ny } } : n,
+          );
+          updateMapNodes(mapRef.current.id, nextNodes);
+        }
+        if (panRef.current) {
+          setViewport({
+            x: panRef.current.originX + (e.clientX - panRef.current.startClientX),
+            y: panRef.current.originY + (e.clientY - panRef.current.startClientY),
+            zoom: viewportRef.current.zoom,
+          });
+        }
+      });
     }
     function handlePointerUp() {
+      cancelAnimationFrame(rafId);
       dragRef.current = null;
       panRef.current = null;
       setDraggingNodeId(undefined);
@@ -319,6 +350,7 @@ export function MindMapCanvas() {
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
     return () => {
+      cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
@@ -429,11 +461,43 @@ export function MindMapCanvas() {
             const target = nodeById.get(edge.target);
             if (!source || !target) return null;
             return (
-              <path
-                key={edge.id}
-                d={createEdgePath(source, target, viewport)}
-                className={edge.animated ? 'canvas-edge is-animated' : 'canvas-edge'}
-              />
+              <g key={edge.id} className="canvas-edge-group">
+                <path
+                  d={createEdgePath(source, target, viewport)}
+                  className={edge.animated ? 'canvas-edge is-animated' : 'canvas-edge'}
+                />
+                {/* Invisible wider hit area for clicking */}
+                <path
+                  d={createEdgePath(source, target, viewport)}
+                  className="canvas-edge-hitarea"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteEdge(edge.id);
+                  }}
+                />
+                {/* Delete indicator at midpoint */}
+                {(() => {
+                  const sx = toScreenX(source.position.x + NODE_WIDTH, viewport);
+                  const sy = toScreenY(source.position.y + NODE_HEIGHT / 2, viewport);
+                  const ex = toScreenX(target.position.x, viewport);
+                  const ey = toScreenY(target.position.y + NODE_HEIGHT / 2, viewport);
+                  const mx = (sx + ex) / 2;
+                  const my = (sy + ey) / 2;
+                  return (
+                    <g
+                      className="edge-delete-indicator"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteEdge(edge.id);
+                      }}
+                    >
+                      <circle cx={mx} cy={my} r={10} />
+                      <line x1={mx - 4} y1={my - 4} x2={mx + 4} y2={my + 4} />
+                      <line x1={mx + 4} y1={my - 4} x2={mx - 4} y2={my + 4} />
+                    </g>
+                  );
+                })()}
+              </g>
             );
           })}
         </svg>
@@ -455,6 +519,7 @@ export function MindMapCanvas() {
                 isSelected={selectedNode?.id === node.id}
                 isPendingConnection={pendingConnectionSourceId === node.id}
                 childCount={childCounts.get(node.id) ?? 0}
+                hasParentEdge={parentEdgeMap.has(node.id)}
                 onPointerDown={(e) => {
                   const t = e.target as HTMLElement | null;
                   if (e.button !== 0 || t?.closest('button, input, textarea, a')) return;
@@ -489,13 +554,15 @@ export function MindMapCanvas() {
                   updateMindNode(node.id, { collapsed: !node.data.collapsed });
                 }}
                 onAttachFile={() => triggerFileInput(node.id)}
+                onDeleteAttachment={() => deleteAttachment(node.id)}
+                onDisconnectFromParent={() => disconnectFromParent(node.id)}
               />
             </div>
           ))}
         </div>
       </div>
 
-      {/* Zoom controls */}
+      {/* Zoom controls + Info panel */}
       <div className="canvas-zoom-controls" aria-label="Canvas zoom controls">
         <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => zoomAtPoint(viewport.zoom * 1.15)}>
           <ZoomIn size={16} />
@@ -506,6 +573,24 @@ export function MindMapCanvas() {
         <button type="button" title="Fit canvas" aria-label="Fit canvas" onClick={() => fitToNodes()}>
           <Maximize2 size={16} />
         </button>
+      </div>
+
+      {/* Mini info panel */}
+      <div className="canvas-info-panel" aria-label="Canvas info">
+        <div className="canvas-info-item">
+          <span className="canvas-info-label">Zoom</span>
+          <span className="canvas-info-value">{Math.round(viewport.zoom * 100)}%</span>
+        </div>
+        <div className="canvas-info-separator" />
+        <div className="canvas-info-item">
+          <span className="canvas-info-label">Nodes</span>
+          <span className="canvas-info-value">{map.nodes.length}</span>
+        </div>
+        <div className="canvas-info-separator" />
+        <div className="canvas-info-item">
+          <span className="canvas-info-label">Edges</span>
+          <span className="canvas-info-value">{map.edges.length}</span>
+        </div>
       </div>
     </div>
   );

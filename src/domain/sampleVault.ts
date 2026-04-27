@@ -4,7 +4,7 @@ const now = new Date().toISOString();
 
 export const sampleVault: BrainVault = {
   id: 'vault-mind-map',
-  name: 'Mind Map',
+  name: 'MindMap',
   version: '0.1.0',
   createdAt: now,
   updatedAt: now,

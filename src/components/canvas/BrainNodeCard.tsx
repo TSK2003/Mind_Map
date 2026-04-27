@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Image, Link2, Minus, Paperclip, Plus, Waypoints } from 'lucide-react';
+import { ChevronRight, FileText, Image, Link2, Minus, Paperclip, Plus, Unlink, Waypoints, X } from 'lucide-react';
 import type { MindMapNode } from '../../domain/types';
 
 export function BrainNodeCard({
@@ -6,6 +6,7 @@ export function BrainNodeCard({
   isSelected,
   isPendingConnection,
   childCount,
+  hasParentEdge,
   onPointerDown,
   onSelect,
   onOpenNote,
@@ -14,11 +15,14 @@ export function BrainNodeCard({
   onStartConnection,
   onToggleCollapse,
   onAttachFile,
+  onDeleteAttachment,
+  onDisconnectFromParent,
 }: {
   node: MindMapNode;
   isSelected: boolean;
   isPendingConnection: boolean;
   childCount: number;
+  hasParentEdge: boolean;
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
   onSelect: () => void;
   onOpenNote: () => void;
@@ -27,6 +31,8 @@ export function BrainNodeCard({
   onStartConnection: () => void;
   onToggleCollapse: () => void;
   onAttachFile: () => void;
+  onDeleteAttachment: () => void;
+  onDisconnectFromParent: () => void;
 }) {
   const hasChildren = childCount > 0;
   const isCollapsed = Boolean(node.data.collapsed);
@@ -66,6 +72,14 @@ export function BrainNodeCard({
                 <span>{node.data.attachment.name}</span>
               </div>
             )}
+            <button
+              className="attachment-delete-btn"
+              type="button"
+              title="Remove attachment"
+              onClick={(e) => { e.stopPropagation(); onDeleteAttachment(); }}
+            >
+              <X size={12} />
+            </button>
           </div>
         ) : null}
 
@@ -106,6 +120,12 @@ export function BrainNodeCard({
               <Image size={12} />
               <span>Attach</span>
             </button>
+            {hasParentEdge ? (
+              <button className="brain-node-action is-danger" type="button" onClick={(e) => { e.stopPropagation(); onDisconnectFromParent(); }}>
+                <Unlink size={12} />
+                <span>Unlink</span>
+              </button>
+            ) : null}
           </div>
         ) : null}
 

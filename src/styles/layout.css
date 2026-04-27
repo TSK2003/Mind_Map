@@ -510,8 +510,70 @@
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 54px minmax(0, 1fr);
+  }
+
+  .workspace {
+    grid-template-rows: 52px minmax(0, 1fr);
+  }
+
+  .topbar {
+    padding: 0 12px;
+    gap: 10px;
+  }
+
+  .vault-title h1 {
+    font-size: 13px;
+  }
+
+  .vault-title p {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-shell {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding: 10px 6px;
+    gap: 4px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    margin-bottom: 4px;
+  }
+
+  .brand-mark img {
+    width: 24px;
+    height: 24px;
+  }
+
+  .icon-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .workspace {
+    grid-template-rows: 48px minmax(0, 1fr);
+  }
+
+  .topbar {
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .topbar-actions .icon-button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .primary-pane {
+    border-right: none;
   }
 }

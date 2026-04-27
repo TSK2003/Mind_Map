@@ -8,6 +8,7 @@ interface MindMapApi {
   saveVaultAs: (vault: BrainVault) => Promise<VaultFileResult | null>;
   getUserDataPath: () => Promise<string>;
   runAgent: (request: AgentRequest) => Promise<AgentTextResponse>;
+  onMenuAction: (channel: string, callback: () => void) => () => void;
 }
 
 declare module '*.png' {

@@ -5,7 +5,7 @@ import type { AgentResult } from '../domain/types';
 import { createAgentResult, describeActionPlan, planAgentActions } from '../services/assistant';
 import { getDesktopApi } from '../services/desktop';
 import { useBrainStore } from '../store/useBrainStore';
-import { MapInspector } from './MapInspector';
+import { MapInspector } from './inspector/MapInspector';
 
 const starterActions = [
   { icon: Lightbulb, label: 'Expand idea', prompt: 'Expand this idea into a practical mind map' },
