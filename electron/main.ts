@@ -68,6 +68,8 @@ const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const defaultSystemPrompt =
   'You are the live AI agent inside Mind Map, an offline-first knowledge and mind mapping app. Answer using the supplied vault context. Be concise, practical, and convert the user request into useful next steps.';
 const defaultOllamaBaseUrl = 'http://127.0.0.1:11434';
+const backupRetentionLimit = 24;
+const backupThrottleMs = 1000 * 60 * 5;
 
 let mainWindow: BrowserWindowType | null = null;
 
@@ -117,6 +119,13 @@ function compactVaultContext(vault: BrainVault) {
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '');
+}
+
+function sanitizeName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'vault';
 }
 
 function buildPromptContent(request: AgentRequest) {
@@ -417,6 +426,46 @@ async function readVault(filePath: string): Promise<VaultFileResult> {
   };
 }
 
+async function writeVaultBackup(filePath: string, payload: string) {
+  const vaultName = sanitizeName(path.basename(filePath, path.extname(filePath)));
+  const backupRoot = path.join(app.getPath('userData'), 'vault-backups', vaultName);
+  const extension = path.extname(filePath) || '.brain';
+
+  await fs.mkdir(backupRoot, { recursive: true });
+
+  const existingEntries = await fs.readdir(backupRoot, { withFileTypes: true });
+  const existingBackups = await Promise.all(
+    existingEntries
+      .filter((entry) => entry.isFile())
+      .map(async (entry) => {
+        const fullPath = path.join(backupRoot, entry.name);
+        const stats = await fs.stat(fullPath);
+        return {
+          fullPath,
+          stats,
+        };
+      }),
+  );
+
+  const newestBackup = existingBackups
+    .slice()
+    .sort((left, right) => right.stats.mtimeMs - left.stats.mtimeMs)[0];
+
+  if (newestBackup && Date.now() - newestBackup.stats.mtimeMs < backupThrottleMs) {
+    return;
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(backupRoot, `${timestamp}${extension}`);
+  await fs.writeFile(backupPath, payload, 'utf-8');
+
+  const backupsAfterWrite = [...existingBackups, { fullPath: backupPath, stats: await fs.stat(backupPath) }]
+    .sort((left, right) => right.stats.mtimeMs - left.stats.mtimeMs)
+    .slice(backupRetentionLimit);
+
+  await Promise.all(backupsAfterWrite.map((backup) => fs.rm(backup.fullPath, { force: true })));
+}
+
 async function writeVault(filePath: string, vault: BrainVault): Promise<VaultFileResult> {
   const payload = JSON.stringify(
     {
@@ -428,6 +477,11 @@ async function writeVault(filePath: string, vault: BrainVault): Promise<VaultFil
   );
 
   await fs.writeFile(filePath, payload, 'utf-8');
+  try {
+    await writeVaultBackup(filePath, payload);
+  } catch {
+    // Ignore backup issues so the primary vault save still succeeds.
+  }
   return readVault(filePath);
 }
 
@@ -496,7 +550,7 @@ ipcMain.handle('agent:run', async (_event: IpcMainInvokeEvent, request: AgentReq
     provider: 'local',
     title: 'Local agent response',
     body:
-      'I could not reach a local Ollama model, so I used Mind Map’s built-in offline planner. I still applied the relevant app actions in your vault. To enable full live AI text generation, start Ollama and pull a model such as llama3.2 or gemma3.',
+      'I could not reach a local Ollama model, so I used Mind Map\'s built-in offline planner. I still applied the relevant app actions in your vault. To enable full live AI text generation, start Ollama and pull a model such as llama3.2 or gemma3.',
   };
 });
 

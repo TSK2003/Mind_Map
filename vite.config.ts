@@ -7,6 +7,9 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5181,
     strictPort: true,
+    watch: {
+      ignored: ['**/.tmp-*/**', '**/dist/**', '**/dist-electron/**', '**/release/**'],
+    },
   },
   build: {
     target: 'es2022',

@@ -1,7 +1,7 @@
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Bold, Heading2, Italic, Link2, ListTodo, Plus, Search } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { pageToEditorHtml } from '../services/editorContent';
 import { useBrainStore } from '../store/useBrainStore';
 
@@ -12,6 +12,16 @@ export function NotesWorkspace() {
   const createPage = useBrainStore((state) => state.createPage);
   const openCommandPalette = useBrainStore((state) => state.openCommandPalette);
   const updateSelectedPageContent = useBrainStore((state) => state.updateSelectedPageContent);
+  const updatePageMeta = useBrainStore((state) => state.updatePageMeta);
+  const [query, setQuery] = useState('');
+  const filteredPages = useMemo(
+    () =>
+      pages.filter((page) => {
+        const searchValue = `${page.title} ${page.tags.join(' ')}`.toLowerCase();
+        return searchValue.includes(query.trim().toLowerCase());
+      }),
+    [pages, query],
+  );
   const selectedPage = useMemo(() => pages.find((page) => page.id === selectedPageId) ?? pages[0], [pages, selectedPageId]);
   const content = useMemo(() => (selectedPage ? pageToEditorHtml(selectedPage) : ''), [selectedPage]);
 
@@ -52,8 +62,12 @@ export function NotesWorkspace() {
             </button>
           </div>
         </div>
+        <label className="notes-search">
+          <Search size={15} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pages" />
+        </label>
         <div className="page-stack">
-          {pages.map((page) => (
+          {filteredPages.map((page) => (
             <button
               className={page.id === selectedPage.id ? 'page-row is-selected' : 'page-row'}
               key={page.id}
@@ -70,7 +84,13 @@ export function NotesWorkspace() {
         <div className="document-meta">
           <div>
             <span className="eyebrow">Personal wiki</span>
-            <h2>{selectedPage.title}</h2>
+            <input
+              className="document-title-input"
+              type="text"
+              value={selectedPage.title}
+              onChange={(event) => updatePageMeta(selectedPage.id, { title: event.target.value })}
+              aria-label="Page title"
+            />
           </div>
           <div className="tag-row">
             {selectedPage.tags.map((tag) => (

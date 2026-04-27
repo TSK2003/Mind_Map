@@ -258,7 +258,7 @@ export const sampleVault: BrainVault = {
   ],
   settings: {
     theme: 'system',
-    aiProvider: 'local',
+    aiProvider: 'none',
     defaultMapLayout: 'organic',
   },
 };

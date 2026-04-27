@@ -22,6 +22,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const chatSettings = useBrainStore((state) => state.chatSettings);
   const updateSettings = useBrainStore((state) => state.updateSettings);
   const updateChatSettings = useBrainStore((state) => state.updateChatSettings);
+  const chatStatusLabel =
+    chatSettings.provider === 'none'
+      ? 'offline planner'
+      : chatSettings.provider === 'openai-compatible'
+        ? chatSettings.baseUrl.trim() && chatSettings.model.trim() && chatSettings.apiKey.trim()
+          ? 'api configured'
+          : 'setup needed'
+        : 'local model optional';
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -72,7 +80,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <section className="settings-group">
           <div className="settings-group-heading">
             <span>Chatbot</span>
-            <strong>{chatSettings.provider === 'none' ? 'offline planner' : 'live chat ready'}</strong>
+            <strong>{chatStatusLabel}</strong>
           </div>
           <div className="segmented-control" role="group" aria-label="Chat provider">
             {providerOptions.map((option) => (

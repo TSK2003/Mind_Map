@@ -1,11 +1,13 @@
+import { lazy, Suspense } from 'react';
 import { AssistantPanel } from './AssistantPanel';
-import { GraphPreview } from './GraphPreview';
 import { MindMapCanvas } from './MindMapCanvas';
-import { NotesWorkspace } from './NotesWorkspace';
-import { ProductivityDashboard } from './ProductivityDashboard';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { useBrainStore } from '../store/useBrainStore';
+
+const GraphPreview = lazy(async () => ({ default: (await import('./GraphPreview')).GraphPreview }));
+const NotesWorkspace = lazy(async () => ({ default: (await import('./NotesWorkspace')).NotesWorkspace }));
+const ProductivityDashboard = lazy(async () => ({ default: (await import('./ProductivityDashboard')).ProductivityDashboard }));
 
 export function AppShell() {
   const activeView = useBrainStore((state) => state.activeView);
@@ -18,9 +20,21 @@ export function AppShell() {
         <div className="workspace-grid">
           <section className="primary-pane">
             {activeView === 'map' ? <MindMapCanvas /> : null}
-            {activeView === 'notes' ? <NotesWorkspace /> : null}
-            {activeView === 'graph' ? <GraphPreview /> : null}
-            {activeView === 'tasks' || activeView === 'dashboard' ? <ProductivityDashboard /> : null}
+            {activeView === 'notes' ? (
+              <Suspense fallback={<div className="view-loading">Loading notes workspace...</div>}>
+                <NotesWorkspace />
+              </Suspense>
+            ) : null}
+            {activeView === 'graph' ? (
+              <Suspense fallback={<div className="view-loading">Loading graph workspace...</div>}>
+                <GraphPreview />
+              </Suspense>
+            ) : null}
+            {activeView === 'tasks' || activeView === 'dashboard' ? (
+              <Suspense fallback={<div className="view-loading">Loading dashboard...</div>}>
+                <ProductivityDashboard />
+              </Suspense>
+            ) : null}
           </section>
           <AssistantPanel />
         </div>
@@ -28,4 +42,3 @@ export function AppShell() {
     </main>
   );
 }
-

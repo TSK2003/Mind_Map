@@ -48,7 +48,9 @@ const nodeTypes = {
 export function MindMapCanvas() {
   const map = useBrainStore((state) => state.vault.maps[0]);
   const vaultLoadVersion = useBrainStore((state) => state.vaultLoadVersion);
+  const selectedMapNodeId = useBrainStore((state) => state.selectedMapNodeId);
   const setSelectedPage = useBrainStore((state) => state.setSelectedPage);
+  const setSelectedMapNode = useBrainStore((state) => state.setSelectedMapNode);
   const addMindNode = useBrainStore((state) => state.addMindNode);
   const expandActiveMap = useBrainStore((state) => state.expandActiveMap);
   const updateMapNodes = useBrainStore((state) => state.updateMapNodes);
@@ -56,27 +58,80 @@ export function MindMapCanvas() {
   const [flow, setFlow] = useState<ReactFlowInstance<Node<MindNodeData>, Edge> | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const pendingFocusNodeIdRef = useRef<string | null>(null);
-  const lastPaneClickRef = useRef<{ at: number; x: number; y: number } | null>(null);
+  const lastAutoFitVersionRef = useRef<number | null>(null);
+  const visibleNodeIds = useMemo(() => {
+    const nodesById = new Map(map.nodes.map((node) => [node.id, node]));
+    const incomingCount = new Map<string, number>();
+    const outgoingBySource = new Map<string, string[]>();
+
+    map.edges.forEach((edge) => {
+      incomingCount.set(edge.target, (incomingCount.get(edge.target) ?? 0) + 1);
+      const existingTargets = outgoingBySource.get(edge.source) ?? [];
+      existingTargets.push(edge.target);
+      outgoingBySource.set(edge.source, existingTargets);
+    });
+
+    const roots = map.nodes.filter((node) => (incomingCount.get(node.id) ?? 0) === 0);
+    const visitQueue = roots.length > 0 ? roots.map((node) => node.id) : map.nodes.slice(0, 1).map((node) => node.id);
+    const visible = new Set<string>();
+
+    while (visitQueue.length > 0) {
+      const currentNodeId = visitQueue.shift();
+      if (!currentNodeId || visible.has(currentNodeId)) {
+        continue;
+      }
+
+      visible.add(currentNodeId);
+      const currentNode = nodesById.get(currentNodeId);
+      if (currentNode?.data.collapsed) {
+        continue;
+      }
+
+      (outgoingBySource.get(currentNodeId) ?? []).forEach((targetId) => {
+        if (!visible.has(targetId)) {
+          visitQueue.push(targetId);
+        }
+      });
+    }
+
+    map.nodes.forEach((node) => {
+      if (!incomingCount.has(node.id) && !visible.has(node.id)) {
+        visible.add(node.id);
+      }
+    });
+
+    return visible;
+  }, [map.edges, map.nodes]);
+  const selectedNodeLabel = useMemo(
+    () => map.nodes.find((node) => node.id === selectedMapNodeId)?.data.label ?? 'Current idea',
+    [map.nodes, selectedMapNodeId],
+  );
   const nodes = useMemo<Node<MindNodeData>[]>(
     () =>
-      map.nodes.map((node) => ({
-        ...node,
-        data: node.data,
-      })),
-    [map.nodes],
+      map.nodes
+        .filter((node) => visibleNodeIds.has(node.id))
+        .map((node) => ({
+          ...node,
+          data: node.data,
+        })),
+    [map.nodes, visibleNodeIds],
   );
   const edges = useMemo<Edge[]>(
     () =>
-      map.edges.map((edge) => ({
-        ...edge,
-        markerEnd: undefined,
-      })),
-    [map.edges],
+      map.edges
+        .filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+        .map((edge) => ({
+          ...edge,
+          markerEnd: undefined,
+        })),
+    [map.edges, visibleNodeIds],
   );
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node<MindNodeData>>[]) => {
-      const nextNodes = applyNodeChanges(changes, nodes).map(
+      const changedNodeIds = new Set(changes.flatMap((change) => ('id' in change ? [change.id] : [])));
+      const removedNodeIds = new Set(changes.flatMap((change) => (change.type === 'remove' ? [change.id] : [])));
+      const nextVisibleNodes = applyNodeChanges(changes, nodes).map(
         (node) =>
           ({
             id: node.id,
@@ -86,14 +141,26 @@ export function MindMapCanvas() {
             data: node.data,
           }) satisfies MindMapNode,
       );
+      const nextVisibleNodeMap = new Map(nextVisibleNodes.map((node) => [node.id, node]));
+      const nextNodes = map.nodes
+        .filter((node) => !removedNodeIds.has(node.id))
+        .map((node) => {
+          if (!changedNodeIds.has(node.id)) {
+            return node;
+          }
+
+          return nextVisibleNodeMap.get(node.id) ?? node;
+        });
       updateMapNodes(map.id, nextNodes);
     },
-    [map.id, nodes, updateMapNodes],
+    [map.id, map.nodes, nodes, updateMapNodes],
   );
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange<Edge>[]) => {
-      const nextEdges = applyEdgeChanges(changes, edges).map(
+      const changedEdgeIds = new Set(changes.flatMap((change) => ('id' in change ? [change.id] : [])));
+      const removedEdgeIds = new Set(changes.flatMap((change) => (change.type === 'remove' ? [change.id] : [])));
+      const nextVisibleEdges = applyEdgeChanges(changes, edges).map(
         (edge) =>
           ({
             id: edge.id,
@@ -104,9 +171,19 @@ export function MindMapCanvas() {
             animated: edge.animated,
           }) satisfies MindMapEdge,
       );
+      const nextVisibleEdgeMap = new Map(nextVisibleEdges.map((edge) => [edge.id, edge]));
+      const nextEdges = map.edges
+        .filter((edge) => !removedEdgeIds.has(edge.id))
+        .map((edge) => {
+          if (!changedEdgeIds.has(edge.id)) {
+            return edge;
+          }
+
+          return nextVisibleEdgeMap.get(edge.id) ?? edge;
+        });
       updateMapEdges(map.id, nextEdges);
     },
-    [edges, map.id, updateMapEdges],
+    [edges, map.edges, map.id, updateMapEdges],
   );
 
   const onConnect = useCallback(
@@ -132,6 +209,11 @@ export function MindMapCanvas() {
       return;
     }
 
+    if (lastAutoFitVersionRef.current === vaultLoadVersion) {
+      return;
+    }
+
+    lastAutoFitVersionRef.current = vaultLoadVersion;
     const timeoutId = window.setTimeout(() => {
       void flow.fitView({
         padding: 0.22,
@@ -210,7 +292,7 @@ export function MindMapCanvas() {
           <Plus size={17} />
           <span>Node</span>
         </button>
-        <button type="button" title="AI expand" aria-label="AI expand" onClick={() => expandActiveMap('Current idea')}>
+        <button type="button" title="AI expand" aria-label="AI expand" onClick={() => expandActiveMap(selectedNodeLabel)}>
           <WandSparkles size={17} />
           <span>Expand</span>
         </button>
@@ -228,6 +310,7 @@ export function MindMapCanvas() {
         onConnect={onConnect}
         onInit={setFlow}
         onPaneClick={(event) => {
+          setSelectedMapNode(undefined);
           const position = flow?.screenToFlowPosition({
             x: event.clientX,
             y: event.clientY,
@@ -237,26 +320,15 @@ export function MindMapCanvas() {
             return;
           }
 
-          const now = Date.now();
-          const previousClick = lastPaneClickRef.current;
-          lastPaneClickRef.current = {
-            at: now,
-            x: position.x,
-            y: position.y,
-          };
-
-          if (!previousClick) {
-            return;
-          }
-
-          const withinDoubleClickWindow = now - previousClick.at <= 320;
-          const withinClickRadius =
-            Math.abs(previousClick.x - position.x) <= 28 && Math.abs(previousClick.y - position.y) <= 28;
-
-          if (withinDoubleClickWindow && withinClickRadius) {
-            lastPaneClickRef.current = null;
+          if (event.detail >= 2) {
             addNodeAtPosition(position);
           }
+        }}
+        onSelectionChange={({ nodes: selectedNodes }) => {
+          setSelectedMapNode(selectedNodes[0]?.id);
+        }}
+        onNodeClick={(_, node) => {
+          setSelectedMapNode(node.id);
         }}
         onNodeDoubleClick={(_, node) => {
           const noteId = (node.data as MindNodeData).noteId;

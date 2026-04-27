@@ -4,8 +4,8 @@ export const defaultOllamaBaseUrl = 'http://127.0.0.1:11434';
 export const defaultOpenAICompatibleBaseUrl = 'https://api.openai.com/v1';
 
 export const defaultChatSettings: ChatSettings = {
-  provider: 'local',
-  baseUrl: defaultOllamaBaseUrl,
+  provider: 'none',
+  baseUrl: '',
   apiKey: '',
   model: '',
 };

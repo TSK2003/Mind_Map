@@ -265,6 +265,17 @@ textarea:disabled {
   overflow: hidden;
 }
 
+.view-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  background: var(--surface);
+}
+
 .canvas-shell {
   position: relative;
   height: 100%;
@@ -408,12 +419,37 @@ textarea:disabled {
   min-height: 0;
   padding: 14px;
   gap: 14px;
+  overflow: auto;
 }
 
 .assistant-header {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.assistant-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.assistant-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.assistant-tab.is-active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal);
 }
 
 .assistant-action-grid {
@@ -434,6 +470,226 @@ textarea:disabled {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-strong);
+}
+
+.assistant-plan-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.assistant-plan-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assistant-apply {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  margin-top: 14px;
+  padding: 0 12px;
+  border: 1px solid var(--teal);
+  border-radius: var(--radius);
+  background: var(--teal);
+  color: white;
+  cursor: pointer;
+}
+
+.side-panel-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+}
+
+.side-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.side-panel-header h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.side-panel-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inspector-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.inspector-field {
+  display: grid;
+  gap: 8px;
+}
+
+.inspector-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.inspector-field input,
+.inspector-field textarea,
+.notes-search input,
+.document-title-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  outline: 0;
+}
+
+.inspector-field input,
+.notes-search input,
+.document-title-input {
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.inspector-field textarea {
+  min-height: 94px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.inspector-field input:focus,
+.inspector-field textarea:focus,
+.notes-search input:focus,
+.document-title-input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(34, 124, 114, 0.14);
+}
+
+.tone-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tone-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.tone-chip.is-active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.tone-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.tone-dot.tone-teal {
+  background: var(--teal);
+}
+
+.tone-dot.tone-amber {
+  background: var(--amber);
+}
+
+.tone-dot.tone-rose {
+  background: var(--rose);
+}
+
+.tone-dot.tone-violet {
+  background: var(--violet);
+}
+
+.tone-dot.tone-lime {
+  background: var(--lime);
+}
+
+.tone-dot.tone-sky {
+  background: var(--sky);
+}
+
+.inspector-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.inspector-actions button,
+.linked-note-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.linked-note-row {
+  justify-content: flex-start;
+}
+
+.workspace-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workspace-metric {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.workspace-metric strong {
+  font-size: 18px;
+}
+
+.workspace-metric span,
+.shortcut-list span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.shortcut-list {
+  display: grid;
+  gap: 8px;
 }
 
 .response-title,
@@ -531,6 +787,25 @@ textarea:disabled {
   padding: 12px;
 }
 
+.notes-search {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.notes-search input {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -618,6 +893,15 @@ textarea:disabled {
   text-transform: uppercase;
 }
 
+.document-title-input {
+  margin-top: 8px;
+  border: 1px solid transparent;
+  padding: 0 4px;
+  background: transparent;
+  font-size: 28px;
+  font-weight: 800;
+}
+
 .tag-row {
   display: flex;
   flex-wrap: wrap;
@@ -699,6 +983,10 @@ textarea:disabled {
   fill: var(--ink);
   font-size: 13px;
   font-weight: 800;
+}
+
+.graph-node {
+  cursor: pointer;
 }
 
 .relationship-list {
@@ -804,9 +1092,12 @@ textarea:disabled {
 .task-card {
   display: grid;
   gap: 10px;
+  width: 100%;
   margin-top: 10px;
   padding: 12px;
   border-left-width: 4px;
+  text-align: left;
+  cursor: pointer;
 }
 
 .task-card time {

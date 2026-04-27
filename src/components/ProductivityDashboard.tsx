@@ -5,6 +5,7 @@ const columns = ['backlog', 'active', 'blocked', 'done'] as const;
 
 export function ProductivityDashboard() {
   const vault = useBrainStore((state) => state.vault);
+  const setSelectedPage = useBrainStore((state) => state.setSelectedPage);
 
   return (
     <div className="productivity-pane">
@@ -37,13 +38,23 @@ export function ProductivityDashboard() {
               {vault.tasks
                 .filter((task) => task.status === column)
                 .map((task) => (
-                  <article className={`task-card priority-${task.priority}`} key={task.id}>
+                  <button
+                    className={`task-card priority-${task.priority}`}
+                    key={task.id}
+                    type="button"
+                    onClick={() => {
+                      const linkedPageId = task.linkedPageIds[0];
+                      if (linkedPageId) {
+                        setSelectedPage(linkedPageId);
+                      }
+                    }}
+                  >
                     <div>
                       {task.status === 'done' ? <CheckCircle2 size={16} /> : <CircleDashed size={16} />}
                       <span>{task.title}</span>
                     </div>
                     {task.dueDate ? <time>{task.dueDate}</time> : null}
-                  </article>
+                  </button>
                 ))}
             </div>
           ))}
@@ -91,4 +102,3 @@ export function ProductivityDashboard() {
     </div>
   );
 }
-

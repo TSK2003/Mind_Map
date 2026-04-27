@@ -8,15 +8,24 @@ const commands: Array<{ label: string; view: WorkspaceView; icon: typeof Search 
   { label: 'Open notes', view: 'notes', icon: FileText },
   { label: 'Open graph', view: 'graph', icon: GitBranch },
   { label: 'Open tasks', view: 'tasks', icon: ListChecks },
-  { label: 'Ask AI copilot', view: 'dashboard', icon: Sparkles },
+  { label: 'Open dashboard', view: 'dashboard', icon: Sparkles },
 ];
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
+  const pages = useBrainStore((state) => state.vault.pages);
   const setActiveView = useBrainStore((state) => state.setActiveView);
+  const setSelectedPage = useBrainStore((state) => state.setSelectedPage);
   const filteredCommands = useMemo(
     () => commands.filter((command) => command.label.toLowerCase().includes(query.toLowerCase())),
     [query],
+  );
+  const filteredPages = useMemo(
+    () =>
+      pages
+        .filter((page) => `${page.title} ${page.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, 8),
+    [pages, query],
   );
 
   return (
@@ -43,9 +52,21 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               </button>
             );
           })}
+          {filteredPages.map((page) => (
+            <button
+              key={page.id}
+              type="button"
+              onClick={() => {
+                setSelectedPage(page.id);
+                onClose();
+              }}
+            >
+              <FileText size={17} />
+              <span>{page.title}</span>
+            </button>
+          ))}
         </div>
       </section>
     </div>
   );
 }
-

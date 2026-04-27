@@ -1,6 +1,7 @@
 import { FolderOpen, Moon, Save, Settings2, Sparkles, Sun } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getProviderLabel } from '../domain/chat';
+import { getDesktopApi } from '../services/desktop';
 import { useBrainStore } from '../store/useBrainStore';
 import logoUrl from '../ic_launcher.png';
 
@@ -20,26 +21,34 @@ export function Topbar() {
   const setVault = useBrainStore((state) => state.setVault);
   const updateSettings = useBrainStore((state) => state.updateSettings);
   const openSettings = useBrainStore((state) => state.openSettings);
-  const [status, setStatus] = useState('Local-first vault');
+  const [status, setStatus] = useState(vaultPath ? 'Vault connected' : 'Local workspace');
   const updatedAt = useMemo(() => formatRelativeTime(vault.updatedAt), [vault.updatedAt]);
 
+  useEffect(() => {
+    setStatus(vaultPath ? 'Vault connected' : 'Local workspace');
+  }, [vaultPath]);
+
   async function openVault() {
-    const desktopApi = window.mindMap ?? window.secondBrain;
+    const desktopApi = getDesktopApi();
 
     if (!desktopApi) {
       setStatus('Desktop bridge unavailable');
       return;
     }
 
-    const result = await desktopApi.openVault();
-    if (result) {
-      setVault(result.vault, result.path);
-      setStatus('Vault opened');
+    try {
+      const result = await desktopApi.openVault();
+      if (result) {
+        setVault(result.vault, result.path);
+        setStatus('Vault opened');
+      }
+    } catch {
+      setStatus('Open failed');
     }
   }
 
   async function saveVault() {
-    const desktopApi = window.mindMap ?? window.secondBrain;
+    const desktopApi = getDesktopApi();
 
     if (!desktopApi) {
       localStorage.setItem('mind-map:vault', JSON.stringify(vault));
@@ -47,13 +56,17 @@ export function Topbar() {
       return;
     }
 
-    const result = vaultPath
-      ? await desktopApi.saveVault(vaultPath, vault)
-      : await desktopApi.saveVaultAs(vault);
+    try {
+      const result = vaultPath
+        ? await desktopApi.saveVault(vaultPath, vault)
+        : await desktopApi.saveVaultAs(vault);
 
-    if (result) {
-      setVault(result.vault, result.path);
-      setStatus('Vault saved');
+      if (result) {
+        setVault(result.vault, result.path);
+        setStatus('Vault saved');
+      }
+    } catch {
+      setStatus('Save failed');
     }
   }
 
