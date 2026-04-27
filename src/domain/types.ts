@@ -46,6 +46,7 @@ export interface MindNodeData {
 export interface MindMapNode {
   id: string;
   type?: string;
+  selected?: boolean;
   position: {
     x: number;
     y: number;
@@ -100,6 +101,15 @@ export interface TaskItem {
   linkedPageIds: string[];
 }
 
+export type ChatProvider = 'local' | 'openai-compatible' | 'none';
+
+export interface ChatSettings {
+  provider: ChatProvider;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
 export type AgentActionType = 'create-note' | 'create-map-nodes' | 'create-task' | 'link-notes' | 'search' | 'summarize';
 
 export interface AgentAction {
@@ -130,7 +140,7 @@ export interface AgentResult {
   id: string;
   title: string;
   body: string;
-  provider: 'ollama' | 'local';
+  provider: 'ollama' | 'openai-compatible' | 'local';
   model?: string;
   actions: AgentAction[];
   createdAt: string;
@@ -142,10 +152,11 @@ export interface AgentRequest {
   vault: BrainVault;
   selectedPageId?: string;
   actionPlan?: string;
+  chatSettings?: ChatSettings;
 }
 
 export interface AgentTextResponse {
-  provider: 'ollama' | 'local';
+  provider: 'ollama' | 'openai-compatible' | 'local';
   model?: string;
   title: string;
   body: string;
@@ -180,7 +191,7 @@ export interface BrainVault {
   habits: Habit[];
   settings: {
     theme: 'light' | 'dark' | 'system';
-    aiProvider: 'local' | 'openai-compatible' | 'none';
+    aiProvider: ChatProvider;
     defaultMapLayout: MapDocument['layout'];
   };
 }

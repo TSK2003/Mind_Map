@@ -1,6 +1,7 @@
 import { ArrowUp, Bot, FileSearch, Lightbulb, Map, MessageSquareText, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { createAgentResult, describeActionPlan, planAgentActions } from '../services/assistant';
+import { getProviderLabel } from '../domain/chat';
 import { useBrainStore } from '../store/useBrainStore';
 import type { AgentResult } from '../domain/types';
 
@@ -13,6 +14,7 @@ const starterActions = [
 
 export function AssistantPanel() {
   const vault = useBrainStore((state) => state.vault);
+  const chatSettings = useBrainStore((state) => state.chatSettings);
   const selectedPage = useBrainStore((state) => state.vault.pages.find((page) => page.id === state.selectedPageId));
   const selectedPageId = useBrainStore((state) => state.selectedPageId);
   const applyAgentResult = useBrainStore((state) => state.applyAgentResult);
@@ -22,6 +24,7 @@ export function AssistantPanel() {
     createAgentResult('summarize current vault', vault, planAgentActions('summarize current vault', vault)),
   );
   const contextLabel = useMemo(() => selectedPage?.title ?? vault.name, [selectedPage?.title, vault.name]);
+  const canSend = prompt.trim().length > 0 && !isThinking;
 
   async function submitPrompt(value = prompt) {
     const trimmed = value.trim();
@@ -33,6 +36,23 @@ export function AssistantPanel() {
     setIsThinking(true);
 
     try {
+      if (
+        chatSettings.provider === 'openai-compatible' &&
+        (!chatSettings.baseUrl.trim() || !chatSettings.model.trim() || !chatSettings.apiKey.trim())
+      ) {
+        setReply(
+          applyAgentResult(
+            createAgentResult(trimmed, vault, actions, {
+              provider: 'local',
+              title: 'Finish chatbot setup',
+              body: 'Your API chat is not fully configured yet, so I used the offline planner and still applied the requested workspace actions.',
+            }),
+          ),
+        );
+        setPrompt('');
+        return;
+      }
+
       const desktopApi = window.mindMap ?? window.secondBrain;
       const textResponse = desktopApi
         ? await desktopApi.runAgent({
@@ -40,6 +60,7 @@ export function AssistantPanel() {
             vault,
             selectedPageId,
             actionPlan: describeActionPlan(actions),
+            chatSettings,
           })
         : undefined;
       const result = createAgentResult(trimmed, vault, actions, textResponse);
@@ -87,7 +108,13 @@ export function AssistantPanel() {
         </div>
         <p>{isThinking ? 'Thinking with your vault context and preparing app actions...' : reply.body}</p>
         <div className="agent-meta">
-          <span>{reply.provider === 'ollama' ? `Ollama${reply.model ? ` - ${reply.model}` : ''}` : 'Offline planner'}</span>
+          <span>
+            {reply.provider === 'ollama'
+              ? `Ollama${reply.model ? ` - ${reply.model}` : ''}`
+              : reply.provider === 'openai-compatible'
+                ? reply.model || getProviderLabel(chatSettings.provider)
+                : 'Offline planner'}
+          </span>
           <span>{reply.applied ? 'Applied' : 'Preview'}</span>
         </div>
         <div className="suggested-actions">
@@ -102,11 +129,22 @@ export function AssistantPanel() {
         className="prompt-box"
         onSubmit={(event) => {
           event.preventDefault();
-          submitPrompt();
+          void submitPrompt();
         }}
       >
-        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask, plan, map, or summarize" disabled={isThinking} />
-        <button className="send-button" type="submit" title="Send" aria-label="Send" disabled={isThinking}>
+        <textarea
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              void submitPrompt();
+            }
+          }}
+          placeholder="Ask, plan, map, or summarize"
+          disabled={isThinking}
+        />
+        <button className="send-button" type="submit" title="Send" aria-label="Send" disabled={!canSend}>
           <ArrowUp size={17} />
         </button>
       </form>

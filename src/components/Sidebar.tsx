@@ -16,6 +16,7 @@ export function Sidebar() {
   const activeView = useBrainStore((state) => state.activeView);
   const setActiveView = useBrainStore((state) => state.setActiveView);
   const openCommandPalette = useBrainStore((state) => state.openCommandPalette);
+  const openSettings = useBrainStore((state) => state.openSettings);
 
   return (
     <aside className="sidebar">
@@ -43,10 +44,10 @@ export function Sidebar() {
         <button className="icon-button sidebar-button" type="button" title="Search" aria-label="Search" onClick={openCommandPalette}>
           <Search size={20} />
         </button>
-        <button className="icon-button sidebar-button" type="button" title="Calendar" aria-label="Calendar">
+        <button className="icon-button sidebar-button" type="button" title="Calendar" aria-label="Calendar" onClick={() => setActiveView('dashboard')}>
           <CalendarDays size={20} />
         </button>
-        <button className="icon-button sidebar-button" type="button" title="Settings" aria-label="Settings">
+        <button className="icon-button sidebar-button" type="button" title="Settings" aria-label="Settings" onClick={openSettings}>
           <Settings size={20} />
         </button>
       </div>

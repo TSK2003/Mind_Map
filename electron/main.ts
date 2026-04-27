@@ -1,7 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, type BrowserWindow as BrowserWindowType, type IpcMainInvokeEvent, type OpenDialogOptions, type SaveDialogOptions } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 interface BrainVault {
   name: string;
@@ -50,26 +49,35 @@ interface AgentRequest {
   vault: BrainVault;
   selectedPageId?: string;
   actionPlan?: string;
+  chatSettings?: {
+    provider: 'local' | 'openai-compatible' | 'none';
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+  };
 }
 
 interface AgentTextResponse {
-  provider: 'ollama' | 'local';
+  provider: 'ollama' | 'openai-compatible' | 'local';
   model?: string;
   title: string;
   body: string;
 }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
+const defaultSystemPrompt =
+  'You are the live AI agent inside Mind Map, an offline-first knowledge and mind mapping app. Answer using the supplied vault context. Be concise, practical, and convert the user request into useful next steps.';
+const defaultOllamaBaseUrl = 'http://127.0.0.1:11434';
 
-let mainWindow: BrowserWindow | null = null;
+let mainWindow: BrowserWindowType | null = null;
 
 function getPreloadPath() {
   return path.join(__dirname, 'preload.js');
 }
 
 function getWindowIconPath() {
-  return isDev ? path.join(app.getAppPath(), 'src', 'ic_launcher.png') : path.join(process.resourcesPath, 'icon.png');
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  return isDev ? path.join(app.getAppPath(), 'src', 'ic_launcher.png') : path.join(resourcesPath ?? app.getAppPath(), 'icon.png');
 }
 
 function compactVaultContext(vault: BrainVault) {
@@ -107,27 +115,111 @@ function compactVaultContext(vault: BrainVault) {
   );
 }
 
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/+$/, '');
+}
+
+function buildPromptContent(request: AgentRequest) {
+  return [
+    `User prompt: ${request.prompt}`,
+    `Planned app actions: ${request.actionPlan ?? 'none'}`,
+    `Selected page id: ${request.selectedPageId ?? 'none'}`,
+    'Vault context:',
+    compactVaultContext(request.vault),
+  ].join('\n\n');
+}
+
+function extractOpenAIContent(payload: unknown) {
+  const choice = (payload as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0];
+  const content = choice?.message?.content;
+
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+
+        if (typeof part === 'object' && part && 'text' in part && typeof part.text === 'string') {
+          return part.text;
+        }
+
+        return '';
+      })
+      .join(' ')
+      .trim();
+  }
+
+  return '';
+}
+
+function extractApiErrorMessage(payload: unknown, status: number, baseUrl: string) {
+  const errorPayload = payload as {
+    error?: {
+      message?: unknown;
+    };
+    message?: unknown;
+  };
+
+  const directMessage =
+    typeof errorPayload?.error?.message === 'string'
+      ? errorPayload.error.message
+      : typeof errorPayload?.message === 'string'
+        ? errorPayload.message
+        : '';
+
+  if (directMessage) {
+    return directMessage.trim();
+  }
+
+  if (status === 401) {
+    return 'The API key was rejected. Check that the key is correct and still active.';
+  }
+
+  if (status === 403) {
+    return 'The API request was forbidden. Check the project permissions for this key.';
+  }
+
+  if (status === 429) {
+    return baseUrl.includes('api.openai.com')
+      ? 'OpenAI rejected the request because billing, credits, quota, or rate limits are not available for this project.'
+      : 'The API request was rate limited or the provider account does not currently allow the request.';
+  }
+
+  return `The API request failed with status ${status}.`;
+}
+
 async function runOllamaAgent(request: AgentRequest): Promise<AgentTextResponse | null> {
+  const baseUrl = trimTrailingSlash(request.chatSettings?.baseUrl?.trim() || defaultOllamaBaseUrl);
+  const configuredModel = request.chatSettings?.model?.trim();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
 
   try {
-    const tagsResponse = await fetch('http://127.0.0.1:11434/api/tags', {
-      signal: controller.signal,
-    });
+    let model = configuredModel;
 
-    if (!tagsResponse.ok) {
-      return null;
+    if (!model) {
+      const tagsResponse = await fetch(`${baseUrl}/api/tags`, {
+        signal: controller.signal,
+      });
+
+      if (!tagsResponse.ok) {
+        return null;
+      }
+
+      const tags = (await tagsResponse.json()) as { models?: Array<{ name: string }> };
+      model = tags.models?.find((candidate) => !candidate.name.toLowerCase().includes('embed'))?.name ?? tags.models?.[0]?.name;
     }
-
-    const tags = (await tagsResponse.json()) as { models?: Array<{ name: string }> };
-    const model = tags.models?.find((candidate) => !candidate.name.toLowerCase().includes('embed'))?.name ?? tags.models?.[0]?.name;
 
     if (!model) {
       return null;
     }
 
-    const chatResponse = await fetch('http://127.0.0.1:11434/api/chat', {
+    const chatResponse = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
@@ -141,18 +233,11 @@ async function runOllamaAgent(request: AgentRequest): Promise<AgentTextResponse 
         messages: [
           {
             role: 'system',
-            content:
-              'You are the live AI agent inside Mind Map, an offline-first knowledge and mind mapping app. Answer using the supplied vault context. Be concise, practical, and convert the user request into useful next steps.',
+            content: defaultSystemPrompt,
           },
           {
             role: 'user',
-            content: [
-              `User prompt: ${request.prompt}`,
-              `Planned app actions: ${request.actionPlan ?? 'none'}`,
-              `Selected page id: ${request.selectedPageId ?? 'none'}`,
-              'Vault context:',
-              compactVaultContext(request.vault),
-            ].join('\n\n'),
+            content: buildPromptContent(request),
           },
         ],
       }),
@@ -182,6 +267,113 @@ async function runOllamaAgent(request: AgentRequest): Promise<AgentTextResponse 
   }
 }
 
+async function runOpenAICompatibleAgent(request: AgentRequest): Promise<AgentTextResponse | null> {
+  const baseUrl = trimTrailingSlash(request.chatSettings?.baseUrl?.trim() || '');
+  const apiKey = request.chatSettings?.apiKey?.trim();
+  const model = request.chatSettings?.model?.trim();
+
+  if (!baseUrl || !apiKey || !model) {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        temperature: 0.35,
+        messages: [
+          {
+            role: 'system',
+            content: defaultSystemPrompt,
+          },
+          {
+            role: 'user',
+            content: buildPromptContent(request),
+          },
+        ],
+      }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as unknown;
+
+    if (!response.ok) {
+      return {
+        provider: 'openai-compatible',
+        model,
+        title: 'API chat error',
+        body: `${extractApiErrorMessage(payload, response.status, baseUrl)} I still used the offline planner and applied the requested workspace actions.`,
+      };
+    }
+
+    const body = extractOpenAIContent(payload);
+
+    if (!body) {
+      return {
+        provider: 'openai-compatible',
+        model,
+        title: 'API chat error',
+        body: 'The API answered without usable message content. I still used the offline planner and applied the requested workspace actions.',
+      };
+    }
+
+    return {
+      provider: 'openai-compatible',
+      model,
+      title: 'API chat response',
+      body,
+    };
+  } catch {
+    return {
+      provider: 'openai-compatible',
+      model,
+      title: 'API chat connection failed',
+      body: 'I could not reach the configured API endpoint. Check your internet connection, firewall, base URL, and provider availability. I still used the offline planner and applied the requested workspace actions.',
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function createFallbackAgentResponse(request: AgentRequest): AgentTextResponse {
+  const provider = request.chatSettings?.provider ?? 'local';
+
+  if (provider === 'openai-compatible') {
+    const hasConfig = Boolean(request.chatSettings?.baseUrl?.trim() && request.chatSettings?.apiKey?.trim() && request.chatSettings?.model?.trim());
+
+    return {
+      provider: 'local',
+      title: hasConfig ? 'API chat unavailable' : 'Finish chatbot setup',
+      body: hasConfig
+        ? 'I could not reach your configured API endpoint, so I used Mind Map\'s offline planner instead. Check the base URL, key, and model in Settings.'
+        : 'Add the API base URL, model name, and API key in Settings to use your chatbot provider.',
+    };
+  }
+
+  if (provider === 'none') {
+    return {
+      provider: 'local',
+      title: 'Offline planner response',
+      body: 'Live chat is turned off in Settings, so I used Mind Map\'s offline planner and still prepared the relevant vault actions.',
+    };
+  }
+
+  return {
+    provider: 'local',
+    title: 'Local agent response',
+    body:
+      'I could not reach your local Ollama model, so I used Mind Map\'s built-in offline planner. To enable full live AI text generation, start Ollama and optionally set the model in Settings.',
+  };
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1480,
@@ -205,7 +397,7 @@ function createWindow() {
     mainWindow?.show();
   });
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
     void shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -247,7 +439,7 @@ ipcMain.handle('vault:open', async (): Promise<VaultFileResult | null> => {
       { name: 'Mind Map Vault', extensions: ['brain'] },
       { name: 'JSON', extensions: ['json'] },
     ],
-  } satisfies Electron.OpenDialogOptions;
+  } satisfies OpenDialogOptions;
 
   const result = mainWindow
     ? await dialog.showOpenDialog(mainWindow, openOptions)
@@ -260,16 +452,16 @@ ipcMain.handle('vault:open', async (): Promise<VaultFileResult | null> => {
   return readVault(result.filePaths[0]);
 });
 
-ipcMain.handle('vault:save', async (_event, filePath: string, vault: BrainVault): Promise<VaultFileResult> => {
+ipcMain.handle('vault:save', async (_event: IpcMainInvokeEvent, filePath: string, vault: BrainVault): Promise<VaultFileResult> => {
   return writeVault(filePath, vault);
 });
 
-ipcMain.handle('vault:saveAs', async (_event, vault: BrainVault): Promise<VaultFileResult | null> => {
+ipcMain.handle('vault:saveAs', async (_event: IpcMainInvokeEvent, vault: BrainVault): Promise<VaultFileResult | null> => {
   const saveOptions = {
     title: 'Save Mind Map Vault',
     defaultPath: `${vault.name.replace(/\s+/g, '-').toLowerCase()}.brain`,
     filters: [{ name: 'Mind Map Vault', extensions: ['brain'] }],
-  } satisfies Electron.SaveDialogOptions;
+  } satisfies SaveDialogOptions;
 
   const result = mainWindow
     ? await dialog.showSaveDialog(mainWindow, saveOptions)
@@ -284,7 +476,16 @@ ipcMain.handle('vault:saveAs', async (_event, vault: BrainVault): Promise<VaultF
 
 ipcMain.handle('app:getUserDataPath', () => app.getPath('userData'));
 
-ipcMain.handle('agent:run', async (_event, request: AgentRequest): Promise<AgentTextResponse> => {
+ipcMain.handle('agent:run', async (_event: IpcMainInvokeEvent, request: AgentRequest): Promise<AgentTextResponse> => {
+  if (request.chatSettings?.provider === 'openai-compatible') {
+    const remoteResponse = await runOpenAICompatibleAgent(request);
+    return remoteResponse ?? createFallbackAgentResponse(request);
+  }
+
+  if (request.chatSettings?.provider === 'none') {
+    return createFallbackAgentResponse(request);
+  }
+
   const ollama = await runOllamaAgent(request);
 
   if (ollama) {

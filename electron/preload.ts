@@ -16,10 +16,16 @@ interface AgentRequest {
   vault: BrainVault;
   selectedPageId?: string;
   actionPlan?: string;
+  chatSettings?: {
+    provider: 'local' | 'openai-compatible' | 'none';
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+  };
 }
 
 interface AgentTextResponse {
-  provider: 'ollama' | 'local';
+  provider: 'ollama' | 'openai-compatible' | 'local';
   model?: string;
   title: string;
   body: string;

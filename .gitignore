@@ -8,4 +8,4 @@ release/
 .DS_Store
 Thumbs.db
 .brain/artifacts/
-
+.tmp-*/
