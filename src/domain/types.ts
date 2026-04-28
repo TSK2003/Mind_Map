@@ -1,4 +1,16 @@
-export type WorkspaceView = 'map' | 'notes' | 'graph' | 'tasks' | 'dashboard' | 'flowchart';
+export type WorkspaceView = 'map' | 'flowchart';
+
+export type DiagramMode = 'mind-map' | 'flowchart';
+
+export type DiagramNodeShape =
+  | 'rect'
+  | 'diamond'
+  | 'rounded'
+  | 'start-end'
+  | 'parallelogram'
+  | 'hexagon'
+  | 'cylinder'
+  | 'document';
 
 export type EdgeStyle = 'straight' | 'curved' | 'step';
 
@@ -51,6 +63,7 @@ export interface MindNodeData {
   summary?: string;
   collapsed?: boolean;
   attachment?: NodeAttachment;
+  shape?: DiagramNodeShape;
 }
 
 export interface MindMapNode {
@@ -76,8 +89,8 @@ export interface MindMapEdge {
 export interface MapDocument {
   id: string;
   title: string;
-  mode: 'mind-map' | 'concept-map' | 'whiteboard' | 'flowchart' | 'knowledge-graph';
-  layout: 'radial' | 'tree' | 'organic' | 'timeline' | 'swimlane';
+  mode: DiagramMode;
+  layout: 'radial' | 'tree' | 'organic' | 'timeline' | 'swimlane' | 'sequence' | 'spine';
   nodes: MindMapNode[];
   edges: MindMapEdge[];
   updatedAt: string;
@@ -111,7 +124,7 @@ export interface TaskItem {
   linkedPageIds: string[];
 }
 
-export type ChatProvider = 'local' | 'openai-compatible' | 'none';
+export type ChatProvider = 'local' | 'openai' | 'openai-compatible' | 'none';
 
 export interface ChatSettings {
   provider: ChatProvider;
@@ -120,7 +133,27 @@ export interface ChatSettings {
   model: string;
 }
 
-export type AgentActionType = 'create-note' | 'create-map-nodes' | 'create-task' | 'link-notes' | 'search' | 'summarize';
+export type AgentActionType =
+  | 'create-note'
+  | 'create-map-nodes'
+  | 'create-diagram'
+  | 'create-task'
+  | 'link-notes'
+  | 'search'
+  | 'summarize';
+
+export interface AgentDiagramNode {
+  label: string;
+  summary?: string;
+  tone?: MindNodeData['tone'];
+  shape?: DiagramNodeShape;
+}
+
+export interface AgentDiagramEdge {
+  sourceIndex: number;
+  targetIndex: number;
+  label?: string;
+}
 
 export interface AgentAction {
   id: string;
@@ -134,7 +167,10 @@ export interface AgentAction {
       label: string;
       summary?: string;
       tone?: MindNodeData['tone'];
+      shape?: DiagramNodeShape;
     }>;
+    diagramType?: DiagramMode;
+    edges?: AgentDiagramEdge[];
     task?: {
       title: string;
       priority?: TaskItem['priority'];
@@ -150,7 +186,7 @@ export interface AgentResult {
   id: string;
   title: string;
   body: string;
-  provider: 'ollama' | 'openai-compatible' | 'local';
+  provider: 'ollama' | 'openai' | 'openai-compatible' | 'local';
   model?: string;
   actions: AgentAction[];
   createdAt: string;
@@ -162,28 +198,16 @@ export interface AgentRequest {
   vault: BrainVault;
   selectedPageId?: string;
   actionPlan?: string;
+  activeView?: WorkspaceView;
   chatSettings?: ChatSettings;
 }
 
 export interface AgentTextResponse {
-  provider: 'ollama' | 'openai-compatible' | 'local';
+  provider: 'ollama' | 'openai' | 'openai-compatible' | 'local';
   model?: string;
   title: string;
   body: string;
-}
-
-export interface Goal {
-  id: string;
-  title: string;
-  progress: number;
-  linkedTaskIds: string[];
-}
-
-export interface Habit {
-  id: string;
-  title: string;
-  streak: number;
-  cadence: 'daily' | 'weekly';
+  actions?: AgentAction[];
 }
 
 export interface BrainVault {
@@ -197,8 +221,6 @@ export interface BrainVault {
   relationships: Relationship[];
   attachments: Attachment[];
   tasks: TaskItem[];
-  goals: Goal[];
-  habits: Habit[];
   settings: {
     theme: 'light' | 'dark' | 'system';
     aiProvider: ChatProvider;

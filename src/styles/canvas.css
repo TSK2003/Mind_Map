@@ -699,6 +699,14 @@
   fill-opacity: 0.7;
 }
 
+.minimap-viewport {
+  fill: var(--teal);
+  fill-opacity: 0.1;
+  stroke: var(--teal);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
 /* ── Responsive Canvas ───────────────────────────── */
 
 @media (max-width: 768px) {

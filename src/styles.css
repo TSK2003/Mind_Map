@@ -896,6 +896,7 @@ textarea:disabled {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-strong);
+  box-sizing: border-box;
 }
 
 .prompt-box textarea {
@@ -906,6 +907,8 @@ textarea:disabled {
   outline: 0;
   background: transparent;
   color: var(--ink);
+  box-sizing: border-box;
+  padding: 0;
 }
 
 .send-button {
@@ -1458,6 +1461,10 @@ textarea:disabled {
 .settings-field {
   display: grid;
   gap: 8px;
+}
+
+.settings-field.settings-field-wide {
+  grid-column: span 2;
 }
 
 .settings-field span {

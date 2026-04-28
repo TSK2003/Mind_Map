@@ -49,19 +49,49 @@ interface AgentRequest {
   vault: BrainVault;
   selectedPageId?: string;
   actionPlan?: string;
+  activeView?: 'map' | 'notes' | 'graph' | 'tasks' | 'dashboard' | 'flowchart' | 'stickDiagram';
   chatSettings?: {
-    provider: 'local' | 'openai-compatible' | 'none';
+    provider: 'local' | 'openai' | 'openai-compatible' | 'none';
     baseUrl?: string;
     apiKey?: string;
     model?: string;
   };
 }
 
+interface AgentAction {
+  id: string;
+  type: 'create-note' | 'create-map-nodes' | 'create-diagram' | 'create-task';
+  label: string;
+  payload?: {
+    title?: string;
+    content?: string;
+    tags?: string[];
+    diagramType?: 'mind-map' | 'flowchart' | 'stick-diagram';
+    nodes?: Array<{
+      label: string;
+      summary?: string;
+      tone?: 'teal' | 'amber' | 'rose' | 'violet' | 'lime' | 'sky';
+      shape?: string;
+    }>;
+    edges?: Array<{
+      sourceIndex: number;
+      targetIndex: number;
+      label?: string;
+    }>;
+    task?: {
+      title: string;
+      priority?: 'low' | 'medium' | 'high';
+      dueDate?: string;
+    };
+  };
+}
+
 interface AgentTextResponse {
-  provider: 'ollama' | 'openai-compatible' | 'local';
+  provider: 'ollama' | 'openai' | 'openai-compatible' | 'local';
   model?: string;
   title: string;
   body: string;
+  actions?: AgentAction[];
 }
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
@@ -69,6 +99,8 @@ const appName = 'MindMap';
 const defaultSystemPrompt =
   'You are the live AI agent inside Mind Map, an offline-first knowledge and mind mapping app. Answer using the supplied vault context. Be concise, practical, and convert the user request into useful next steps.';
 const defaultOllamaBaseUrl = 'http://127.0.0.1:11434';
+const defaultOpenAIBaseUrl = 'https://api.openai.com/v1';
+const defaultOpenAIModel = 'gpt-4.1-mini';
 const backupRetentionLimit = 24;
 const backupThrottleMs = 1000 * 60 * 5;
 
@@ -134,9 +166,190 @@ function buildPromptContent(request: AgentRequest) {
     `User prompt: ${request.prompt}`,
     `Planned app actions: ${request.actionPlan ?? 'none'}`,
     `Selected page id: ${request.selectedPageId ?? 'none'}`,
+    `Active workspace: ${request.activeView ?? 'unknown'}`,
     'Vault context:',
     compactVaultContext(request.vault),
   ].join('\n\n');
+}
+
+function createActionId(prefix: string) {
+  return `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function buildStructuredPlanPrompt(request: AgentRequest) {
+  return [
+    'Return valid JSON only. Do not wrap the JSON in markdown.',
+    'Create a practical workflow plan for this Mind Map workspace.',
+    'Use this schema:',
+    JSON.stringify(
+      {
+        title: 'Short response title',
+        body: 'Brief summary for the user.',
+        diagram: {
+          type: 'mind-map | flowchart | stick-diagram | null',
+          title: 'Diagram title',
+          nodes: [
+            {
+              label: 'Step label',
+              summary: 'Short supporting summary',
+              tone: 'teal',
+              shape: 'rect',
+            },
+          ],
+          edges: [
+            {
+              sourceIndex: 0,
+              targetIndex: 1,
+              label: 'Optional edge label',
+            },
+          ],
+        },
+        note: {
+          title: 'Optional note title',
+          content: 'Optional note content',
+          tags: ['optional-tag'],
+        },
+        tasks: [
+          {
+            title: 'Optional task',
+            priority: 'medium',
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    'Rules:',
+    '- If the user asks for a diagram, set diagram.type to the best matching value.',
+    '- Prefer mind-map for brainstorming, flowchart for step-by-step process logic, and stick-diagram for a lighter workflow skeleton.',
+    '- Keep diagram nodes between 3 and 8 items.',
+    '- If a field is not needed, set it to null or an empty array.',
+    '',
+    buildPromptContent(request),
+  ].join('\n');
+}
+
+function normalizeTone(value: unknown): 'teal' | 'amber' | 'rose' | 'violet' | 'lime' | 'sky' {
+  if (value === 'amber' || value === 'rose' || value === 'violet' || value === 'lime' || value === 'sky') {
+    return value;
+  }
+
+  return 'teal';
+}
+
+function buildActionsFromStructuredPlan(content: string): AgentAction[] {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return [];
+  }
+
+  const plan = parsed as {
+    title?: unknown;
+    note?: {
+      title?: unknown;
+      content?: unknown;
+      tags?: unknown;
+    } | null;
+    tasks?: Array<{
+      title?: unknown;
+      priority?: unknown;
+      dueDate?: unknown;
+    }> | null;
+    diagram?: {
+      type?: unknown;
+      title?: unknown;
+      nodes?: Array<{
+        label?: unknown;
+        summary?: unknown;
+        tone?: unknown;
+        shape?: unknown;
+      }> | null;
+      edges?: Array<{
+        sourceIndex?: unknown;
+        targetIndex?: unknown;
+        label?: unknown;
+      }> | null;
+    } | null;
+  };
+
+  const actions: AgentAction[] = [];
+  const diagramType =
+    plan.diagram?.type === 'flowchart' || plan.diagram?.type === 'stick-diagram' || plan.diagram?.type === 'mind-map'
+      ? plan.diagram.type
+      : null;
+  const nodes = Array.isArray(plan.diagram?.nodes)
+    ? plan.diagram.nodes
+        .map((node) => ({
+          label: typeof node.label === 'string' ? node.label.trim() : '',
+          summary: typeof node.summary === 'string' ? node.summary.trim() : undefined,
+          tone: normalizeTone(node.tone),
+          shape: typeof node.shape === 'string' ? node.shape : undefined,
+        }))
+        .filter((node) => node.label)
+        .slice(0, 8)
+    : [];
+  const edges = Array.isArray(plan.diagram?.edges)
+    ? plan.diagram.edges
+        .map((edge) => ({
+          sourceIndex: typeof edge.sourceIndex === 'number' ? edge.sourceIndex : -1,
+          targetIndex: typeof edge.targetIndex === 'number' ? edge.targetIndex : -1,
+          label: typeof edge.label === 'string' ? edge.label.trim() : undefined,
+        }))
+        .filter((edge) => edge.sourceIndex >= 0 && edge.targetIndex >= 0)
+    : [];
+
+  if (diagramType && nodes.length > 0) {
+    actions.push({
+      id: createActionId('agent-action'),
+      type: diagramType === 'mind-map' ? 'create-map-nodes' : 'create-diagram',
+      label: `Generate ${diagramType}: ${typeof plan.diagram?.title === 'string' && plan.diagram.title.trim() ? plan.diagram.title.trim() : 'Workflow'}`,
+      payload: {
+        title: typeof plan.diagram?.title === 'string' && plan.diagram.title.trim() ? plan.diagram.title.trim() : 'Workflow',
+        diagramType,
+        nodes,
+        edges,
+      },
+    });
+  }
+
+  if (plan.note && (typeof plan.note.title === 'string' || typeof plan.note.content === 'string')) {
+    actions.push({
+      id: createActionId('agent-action'),
+      type: 'create-note',
+      label: `Create note: ${typeof plan.note.title === 'string' && plan.note.title.trim() ? plan.note.title.trim() : 'AI Note'}`,
+      payload: {
+        title: typeof plan.note.title === 'string' && plan.note.title.trim() ? plan.note.title.trim() : 'AI Note',
+        content: typeof plan.note.content === 'string' && plan.note.content.trim() ? plan.note.content.trim() : 'AI generated note.',
+        tags: Array.isArray(plan.note.tags) ? plan.note.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 6) : ['ai-generated'],
+      },
+    });
+  }
+
+  if (Array.isArray(plan.tasks)) {
+    plan.tasks.slice(0, 4).forEach((task) => {
+      if (typeof task.title !== 'string' || !task.title.trim()) {
+        return;
+      }
+
+      actions.push({
+        id: createActionId('agent-action'),
+        type: 'create-task',
+        label: `Create task: ${task.title.trim()}`,
+        payload: {
+          task: {
+            title: task.title.trim(),
+            priority: task.priority === 'low' || task.priority === 'high' ? task.priority : 'medium',
+            dueDate: typeof task.dueDate === 'string' ? task.dueDate : undefined,
+          },
+        },
+      });
+    });
+  }
+
+  return actions;
 }
 
 function extractOpenAIContent(payload: unknown) {
@@ -278,9 +491,12 @@ async function runOllamaAgent(request: AgentRequest): Promise<AgentTextResponse 
 }
 
 async function runOpenAICompatibleAgent(request: AgentRequest): Promise<AgentTextResponse | null> {
-  const baseUrl = trimTrailingSlash(request.chatSettings?.baseUrl?.trim() || '');
+  const provider = request.chatSettings?.provider === 'openai' ? 'openai' : 'openai-compatible';
+  const baseUrl = trimTrailingSlash(
+    request.chatSettings?.baseUrl?.trim() || (provider === 'openai' ? defaultOpenAIBaseUrl : ''),
+  );
   const apiKey = request.chatSettings?.apiKey?.trim();
-  const model = request.chatSettings?.model?.trim();
+  const model = request.chatSettings?.model?.trim() || (provider === 'openai' ? defaultOpenAIModel : '');
 
   if (!baseUrl || !apiKey || !model) {
     return null;
@@ -299,15 +515,18 @@ async function runOpenAICompatibleAgent(request: AgentRequest): Promise<AgentTex
       signal: controller.signal,
       body: JSON.stringify({
         model,
-        temperature: 0.35,
+        temperature: 0.2,
+        response_format: {
+          type: 'json_object',
+        },
         messages: [
           {
             role: 'system',
-            content: defaultSystemPrompt,
+            content: `${defaultSystemPrompt}\n\nYou generate structured workflow plans for a desktop diagramming app.`,
           },
           {
             role: 'user',
-            content: buildPromptContent(request),
+            content: buildStructuredPlanPrompt(request),
           },
         ],
       }),
@@ -317,7 +536,7 @@ async function runOpenAICompatibleAgent(request: AgentRequest): Promise<AgentTex
 
     if (!response.ok) {
       return {
-        provider: 'openai-compatible',
+        provider,
         model,
         title: 'API chat error',
         body: `${extractApiErrorMessage(payload, response.status, baseUrl)} I still used the offline planner and applied the requested workspace actions.`,
@@ -325,25 +544,37 @@ async function runOpenAICompatibleAgent(request: AgentRequest): Promise<AgentTex
     }
 
     const body = extractOpenAIContent(payload);
+    const actions = body ? buildActionsFromStructuredPlan(body) : [];
 
     if (!body) {
       return {
-        provider: 'openai-compatible',
+        provider,
         model,
         title: 'API chat error',
         body: 'The API answered without usable message content. I still used the offline planner and applied the requested workspace actions.',
       };
     }
 
+    const parsed = (() => {
+      try {
+        return JSON.parse(body) as { title?: unknown; body?: unknown };
+      } catch {
+        return null;
+      }
+    })();
+
     return {
-      provider: 'openai-compatible',
+      provider,
       model,
-      title: 'API chat response',
-      body,
+      title: typeof parsed?.title === 'string' && parsed.title.trim() ? parsed.title.trim() : 'API chat response',
+      body: typeof parsed?.body === 'string' && parsed.body.trim()
+        ? parsed.body.trim()
+        : 'I generated a structured workflow plan from your prompt and prepared the matching workspace actions.',
+      actions,
     };
   } catch {
     return {
-      provider: 'openai-compatible',
+      provider,
       model,
       title: 'API chat connection failed',
       body: 'I could not reach the configured API endpoint. Check your internet connection, firewall, base URL, and provider availability. I still used the offline planner and applied the requested workspace actions.',
@@ -356,7 +587,7 @@ async function runOpenAICompatibleAgent(request: AgentRequest): Promise<AgentTex
 function createFallbackAgentResponse(request: AgentRequest): AgentTextResponse {
   const provider = request.chatSettings?.provider ?? 'local';
 
-  if (provider === 'openai-compatible') {
+  if (provider === 'openai' || provider === 'openai-compatible') {
     const hasConfig = Boolean(request.chatSettings?.baseUrl?.trim() && request.chatSettings?.apiKey?.trim() && request.chatSettings?.model?.trim());
 
     return {
@@ -404,6 +635,10 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
+    mainWindow?.webContents.setVisualZoomLevelLimits(1, 1);
+    mainWindow?.webContents.on('zoom-changed', (event) => {
+      event.preventDefault();
+    });
     mainWindow?.show();
   });
 
@@ -665,7 +900,7 @@ ipcMain.handle('vault:saveAs', async (_event: IpcMainInvokeEvent, vault: BrainVa
 ipcMain.handle('app:getUserDataPath', () => app.getPath('userData'));
 
 ipcMain.handle('agent:run', async (_event: IpcMainInvokeEvent, request: AgentRequest): Promise<AgentTextResponse> => {
-  if (request.chatSettings?.provider === 'openai-compatible') {
+  if (request.chatSettings?.provider === 'openai' || request.chatSettings?.provider === 'openai-compatible') {
     const remoteResponse = await runOpenAICompatibleAgent(request);
     return remoteResponse ?? createFallbackAgentResponse(request);
   }

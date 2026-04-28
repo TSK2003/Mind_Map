@@ -15,6 +15,7 @@ const DEFAULT_NODE_SUMMARY = 'Add details, links, or branch it further.';
 type Viewport = { x: number; y: number; zoom: number };
 type DragState = { nodeId: string; startClientX: number; startClientY: number; originX: number; originY: number };
 type PanState = { startClientX: number; startClientY: number; originX: number; originY: number };
+type MinimapDragState = { offsetX: number; offsetY: number; scale: number };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -110,11 +111,10 @@ function createEdgePath(source: MindMapNode, target: MindMapNode, vp: Viewport, 
 export function MindMapCanvas() {
   const map = useBrainStore((s) => s.vault.maps[0]);
   const vaultLoadVersion = useBrainStore((s) => s.vaultLoadVersion);
+  const lastFitVersionRef = useRef(-1);
   const selectedMapNodeId = useBrainStore((s) => s.selectedMapNodeId);
   const setSelectedMapNode = useBrainStore((s) => s.setSelectedMapNode);
-  const setSelectedPage = useBrainStore((s) => s.setSelectedPage);
   const addMindNode = useBrainStore((s) => s.addMindNode);
-  const createPageFromNode = useBrainStore((s) => s.createPageFromNode);
   const updateMapNodes = useBrainStore((s) => s.updateMapNodes);
   const updateMapEdges = useBrainStore((s) => s.updateMapEdges);
   const updateMindNode = useBrainStore((s) => s.updateMindNode);
@@ -129,6 +129,7 @@ export function MindMapCanvas() {
   const lastSelectedRef = useRef<string | undefined>(selectedMapNodeId);
   const dragRef = useRef<DragState | null>(null);
   const panRef = useRef<PanState | null>(null);
+  const minimapDragRef = useRef<MinimapDragState | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingAttachNodeRef = useRef<string | undefined>(undefined);
 
@@ -175,18 +176,6 @@ export function MindMapCanvas() {
     });
   }, [visibleNodes]);
 
-  const centerOnNode = useCallback((nodeId: string) => {
-    const shell = shellRef.current;
-    const target = mapRef.current.nodes.find((n) => n.id === nodeId);
-    if (!shell || !target) return;
-    const rect = shell.getBoundingClientRect();
-    const z = viewportRef.current.zoom;
-    setViewport((v) => ({
-      ...v,
-      x: rect.width / 2 - (target.position.x + NODE_WIDTH / 2) * z,
-      y: rect.height / 2 - (target.position.y + NODE_HEIGHT / 2) * z,
-    }));
-  }, []);
 
   const zoomAtPoint = useCallback((nextZoom: number, cx?: number, cy?: number) => {
     const shell = shellRef.current;
@@ -203,18 +192,30 @@ export function MindMapCanvas() {
     });
   }, []);
 
+  const updateViewportFromMinimap = useCallback((clientX: number, clientY: number, offsetX: number, offsetY: number, scale: number) => {
+    const shell = shellRef.current;
+    if (!shell || scale <= 0) return;
+    const rect = shell.getBoundingClientRect();
+    const worldX = (clientX - offsetX) / scale;
+    const worldY = (clientY - offsetY) / scale;
+    const zoom = viewportRef.current.zoom;
+    setViewport((current) => ({
+      ...current,
+      x: rect.width / 2 - worldX * zoom,
+      y: rect.height / 2 - worldY * zoom,
+    }));
+  }, []);
+
   const selectNode = useCallback((id: string) => setSelectedMapNode(id), [setSelectedMapNode]);
 
   const addNodeAt = useCallback((position: { x: number; y: number }) => {
-    const id = addMindNode(DEFAULT_NODE_LABEL, DEFAULT_NODE_SUMMARY, position);
-    centerOnNode(id);
-  }, [addMindNode, centerOnNode]);
+    addMindNode(DEFAULT_NODE_LABEL, DEFAULT_NODE_SUMMARY, position);
+  }, [addMindNode]);
 
   const addNodeRelativeToSelected = useCallback((nodeId: string, mode: 'child' | 'sibling') => {
     setSelectedMapNode(nodeId);
-    const id = addMindNode(DEFAULT_NODE_LABEL, DEFAULT_NODE_SUMMARY, undefined, mode);
-    centerOnNode(id);
-  }, [addMindNode, centerOnNode, setSelectedMapNode]);
+    addMindNode(DEFAULT_NODE_LABEL, DEFAULT_NODE_SUMMARY, undefined, mode);
+  }, [addMindNode, setSelectedMapNode]);
 
   const connectNodes = useCallback((sourceId: string, targetId: string) => {
     if (!sourceId || !targetId || sourceId === targetId) {
@@ -302,14 +303,16 @@ export function MindMapCanvas() {
     const pos = toWorldPosition(rect.left + rect.width / 2, rect.top + rect.height / 2, rect, viewportRef.current);
     const id = addMindNode(file.name.replace(/\.[^.]+$/, ''), '', pos);
     await handleFileSelect(file, id);
-    centerOnNode(id);
-  }, [addMindNode, centerOnNode, handleFileSelect]);
+  }, [addMindNode, handleFileSelect]);
 
-  // Fit on vault load
+  // Fit on vault load only (not on every node change)
   useEffect(() => {
+    if (lastFitVersionRef.current === vaultLoadVersion) return;
+    lastFitVersionRef.current = vaultLoadVersion;
     const frameId = requestAnimationFrame(() => fitToNodes());
     return () => cancelAnimationFrame(frameId);
-  }, [fitToNodes, vaultLoadVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaultLoadVersion]);
 
   // Track selected node (no auto-centering — user controls viewport)
   useEffect(() => {
@@ -345,12 +348,22 @@ export function MindMapCanvas() {
             zoom: viewportRef.current.zoom,
           });
         }
+        if (minimapDragRef.current) {
+          updateViewportFromMinimap(
+            e.clientX,
+            e.clientY,
+            minimapDragRef.current.offsetX,
+            minimapDragRef.current.offsetY,
+            minimapDragRef.current.scale,
+          );
+        }
       });
     }
     function handlePointerUp() {
       cancelAnimationFrame(rafId);
       dragRef.current = null;
       panRef.current = null;
+      minimapDragRef.current = null;
       setDraggingNodeId(undefined);
       setIsPanning(false);
     }
@@ -363,7 +376,7 @@ export function MindMapCanvas() {
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [updateMapNodes]);
+  }, [updateMapNodes, updateViewportFromMinimap]);
 
   return (
     <div className={isPanning ? 'canvas-shell is-panning' : 'canvas-shell'} ref={shellRef}>
@@ -556,11 +569,7 @@ export function MindMapCanvas() {
                   }
                   selectNode(node.id);
                 }}
-                onOpenNote={() => { if (node.data.noteId) setSelectedPage(node.data.noteId); }}
-                onCreateNote={() => {
-                  const pageId = createPageFromNode(node.id);
-                  if (pageId) setSelectedPage(pageId);
-                }}
+
                 onAddChild={() => addNodeRelativeToSelected(node.id, 'child')}
                 onStartConnection={() => {
                   selectNode(node.id);
@@ -620,30 +629,30 @@ export function MindMapCanvas() {
         const scale = Math.min((mmW - pad * 2) / bw, (mmH - pad * 2) / bh);
         const ox = (mmW - bw * scale) / 2 - bounds.minX * scale;
         const oy = (mmH - bh * scale) / 2 - bounds.minY * scale;
+        const shellRect = shellRef.current?.getBoundingClientRect();
+        const viewportWorld = shellRect ? {
+          x: -viewport.x / viewport.zoom,
+          y: -viewport.y / viewport.zoom,
+          width: shellRect.width / viewport.zoom,
+          height: shellRect.height / viewport.zoom,
+        } : null;
         return (
           <div
             className="canvas-minimap"
             aria-label="Canvas minimap"
+            onPointerDown={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              minimapDragRef.current = {
+                offsetX: rect.left + ox,
+                offsetY: rect.top + oy,
+                scale,
+              };
+              updateViewportFromMinimap(e.clientX, e.clientY, rect.left + ox, rect.top + oy, scale);
+            }}
             onWheel={(e) => {
               e.stopPropagation();
               const dy = normalizeWheelDistance(e.deltaY, e.deltaMode);
               zoomAtPoint(viewportRef.current.zoom * Math.exp(-dy * 0.005));
-            }}
-            onClick={(e) => {
-              const svgRect = e.currentTarget.getBoundingClientRect();
-              const clickX = e.clientX - svgRect.left;
-              const clickY = e.clientY - svgRect.top;
-              const worldX = (clickX - ox) / scale;
-              const worldY = (clickY - oy) / scale;
-              const shell = shellRef.current;
-              if (!shell) return;
-              const rect = shell.getBoundingClientRect();
-              const z = viewportRef.current.zoom;
-              setViewport((v) => ({
-                ...v,
-                x: rect.width / 2 - worldX * z,
-                y: rect.height / 2 - worldY * z,
-              }));
             }}
           >
             <div className="minimap-zoom-controls">
@@ -680,6 +689,15 @@ export function MindMapCanvas() {
                   />
                 );
               })}
+              {viewportWorld ? (
+                <rect
+                  x={ox + viewportWorld.x * scale}
+                  y={oy + viewportWorld.y * scale}
+                  width={viewportWorld.width * scale}
+                  height={viewportWorld.height * scale}
+                  className="minimap-viewport"
+                />
+              ) : null}
             </svg>
           </div>
         );

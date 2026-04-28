@@ -159,6 +159,55 @@
   gap: 10px;
 }
 
+.settings-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-field.settings-field-wide {
+  grid-column: span 2;
+}
+
+.settings-field span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.settings-field input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  outline: 0;
+  box-sizing: border-box;
+}
+
+.settings-field input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(34, 124, 114, 0.14);
+}
+
+.settings-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .settings-group h2 {
   margin: 0;
   font-size: 17px;

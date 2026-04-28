@@ -3,6 +3,7 @@ import type {
   AgentResult,
   BrainVault,
   ChatSettings,
+  DiagramMode,
   KnowledgePage,
   MapDocument,
   MindMapEdge,
@@ -13,7 +14,6 @@ import type {
   WorkspaceView,
 } from '../domain/types';
 import { defaultChatSettings } from '../domain/chat';
-import { editorHtmlToBlocks, replaceEditorHtmlTitle } from '../services/editorContent';
 
 interface BrainState {
   activeView: WorkspaceView;
@@ -28,12 +28,7 @@ interface BrainState {
   setActiveView: (view: WorkspaceView) => void;
   setVault: (vault: BrainVault, path?: string) => void;
   setChatSettings: (settings: Partial<ChatSettings>) => void;
-  setSelectedPage: (pageId: string) => void;
   setSelectedMapNode: (nodeId?: string) => void;
-  createPage: (title?: string, content?: string, tags?: string[]) => string;
-  deletePage: (pageId: string) => void;
-  createPageFromNode: (nodeId: string) => string | null;
-  createTask: (title: string, priority?: TaskItem['priority']) => string;
   addMindNode: (
     label?: string,
     summary?: string,
@@ -46,9 +41,10 @@ interface BrainState {
   clearMindMap: () => void;
   updateMapNodes: (mapId: string, nodes: MindMapNode[]) => void;
   updateMapEdges: (mapId: string, edges: MindMapEdge[]) => void;
+  updateDiagramNodes: (mode: 'flowchart', nodes: MindMapNode[]) => void;
+  updateDiagramEdges: (mode: 'flowchart', edges: MindMapEdge[]) => void;
+  clearDiagram: (mode: 'flowchart') => void;
   applyAgentResult: (result: AgentResult) => AgentResult;
-  updateSelectedPageContent: (html: string) => void;
-  updatePageMeta: (pageId: string, updates: Partial<Pick<KnowledgePage, 'title' | 'icon' | 'tags'>>) => void;
   updateSettings: (settings: Partial<BrainVault['settings']>) => void;
   updateChatSettings: (settings: Partial<ChatSettings>) => void;
   openCommandPalette: () => void;
@@ -91,7 +87,35 @@ function createFallbackPage(): KnowledgePage {
   };
 }
 
-function createRootMapNode(noteId?: string): MindMapNode {
+function getDiagramModeForView(view: WorkspaceView): Extract<DiagramMode, 'mind-map' | 'flowchart'> | null {
+  if (view === 'map') {
+    return 'mind-map';
+  }
+
+  if (view === 'flowchart') {
+    return 'flowchart';
+  }
+
+  return null;
+}
+
+function createRootNodeForMode(mode: Extract<DiagramMode, 'mind-map' | 'flowchart'>, noteId?: string): MindMapNode {
+  if (mode === 'flowchart') {
+    return {
+      id: createId('node'),
+      type: 'brainNode',
+      selected: false,
+      position: { x: 0, y: 0 },
+      data: {
+        label: 'Start',
+        noteId,
+        tone: 'sky',
+        summary: 'Begin the workflow here.',
+        shape: 'start-end',
+      },
+    };
+  }
+
   return {
     id: createId('node'),
     type: 'brainNode',
@@ -106,14 +130,19 @@ function createRootMapNode(noteId?: string): MindMapNode {
   };
 }
 
-function createStarterMap(noteId?: string): MapDocument {
+function createStarterMap(
+  noteId?: string,
+  mode: Extract<DiagramMode, 'mind-map' | 'flowchart'> = 'mind-map',
+): MapDocument {
+  const rootNode = createRootNodeForMode(mode, noteId);
+
   return {
     id: createId('map'),
-    title: 'Main Map',
-    mode: 'mind-map',
-    layout: 'organic',
+    title: mode === 'flowchart' ? 'Flowchart' : 'Main Map',
+    mode,
+    layout: mode === 'flowchart' ? 'sequence' : 'organic',
     updatedAt: new Date().toISOString(),
-    nodes: [createRootMapNode(noteId)],
+    nodes: [rootNode],
     edges: [],
   };
 }
@@ -133,8 +162,6 @@ function createStarterVault(name = 'MindMap'): BrainVault {
     relationships: [],
     attachments: [],
     tasks: [],
-    goals: [],
-    habits: [],
     settings: {
       theme: 'system',
       aiProvider: 'none',
@@ -142,6 +169,10 @@ function createStarterVault(name = 'MindMap'): BrainVault {
       edgeStyle: 'curved',
     },
   };
+}
+
+function findMapByMode(vault: BrainVault, mode: Extract<DiagramMode, 'mind-map' | 'flowchart' | 'stick-diagram'>) {
+  return vault.maps.find((map) => map.mode === mode);
 }
 
 function normalizePosition(position: MindMapNode['position'] | undefined, index: number) {
@@ -165,6 +196,11 @@ function normalizeMap(map: MapDocument | undefined, fallbackPageId?: string): Ma
     return createStarterMap(fallbackPageId);
   }
 
+  const normalizedMode =
+    map.mode === 'flowchart' || map.mode === 'mind-map'
+      ? map.mode
+      : 'mind-map';
+
   const nodes = Array.isArray(map.nodes) ? map.nodes : [];
   const normalizedNodes: MindMapNode[] = nodes.map((node, index) => ({
     id: node.id || createId('node'),
@@ -182,10 +218,11 @@ function normalizeMap(map: MapDocument | undefined, fallbackPageId?: string): Ma
       attachment: node.data?.attachment && typeof node.data.attachment === 'object'
         ? node.data.attachment as MindNodeData['attachment']
         : undefined,
+      shape: typeof node.data?.shape === 'string' ? node.data.shape as MindNodeData['shape'] : undefined,
     },
   }));
 
-  const ensuredNodes = normalizedNodes.length > 0 ? normalizedNodes : [createRootMapNode(fallbackPageId)];
+  const ensuredNodes = normalizedNodes.length > 0 ? normalizedNodes : [createRootNodeForMode(normalizedMode, fallbackPageId)];
   const nodeIds = new Set(ensuredNodes.map((node) => node.id));
   const edges = Array.isArray(map.edges) ? map.edges : [];
   const normalizedEdges = edges
@@ -201,11 +238,36 @@ function normalizeMap(map: MapDocument | undefined, fallbackPageId?: string): Ma
 
   return {
     ...map,
-    mode: map.mode || 'mind-map',
-    layout: map.layout || 'organic',
+    mode: normalizedMode,
+    layout:
+      (normalizedMode === 'flowchart' ? 'sequence' : 'organic'),
     updatedAt: map.updatedAt || new Date().toISOString(),
     nodes: ensuredNodes,
     edges: normalizedEdges,
+  };
+}
+
+function ensureMapDocument(
+  vault: BrainVault,
+  mode: Extract<DiagramMode, 'mind-map' | 'flowchart'>,
+  fallbackPageId?: string,
+) {
+  const existingMap = findMapByMode(vault, mode);
+  if (existingMap) {
+    return {
+      vault,
+      map: normalizeMap(existingMap, fallbackPageId),
+    };
+  }
+
+  const nextMap = createStarterMap(fallbackPageId, mode);
+
+  return {
+    vault: touchVault({
+      ...vault,
+      maps: [...vault.maps, nextMap],
+    }),
+    map: nextMap,
   };
 }
 
@@ -223,8 +285,6 @@ function normalizeVault(vault: BrainVault): BrainVault {
     relationships: Array.isArray(vault.relationships) ? vault.relationships : [],
     attachments: Array.isArray(vault.attachments) ? vault.attachments : [],
     tasks: Array.isArray(vault.tasks) ? vault.tasks : [],
-    goals: Array.isArray(vault.goals) ? vault.goals : [],
-    habits: Array.isArray(vault.habits) ? vault.habits : [],
     settings: {
       ...fallbackVault.settings,
       ...vault.settings,
@@ -239,16 +299,160 @@ function touchVault(vault: BrainVault): BrainVault {
   };
 }
 
-function updateFirstMap(vault: BrainVault, updater: (map: MapDocument) => MapDocument) {
-  const firstMap = vault.maps[0];
-  if (!firstMap) {
-    return vault;
-  }
+function updateMapByMode(
+  vault: BrainVault,
+  mode: Extract<DiagramMode, 'mind-map' | 'flowchart'>,
+  updater: (map: MapDocument) => MapDocument,
+  fallbackPageId?: string,
+) {
+  const ensured = ensureMapDocument(vault, mode, fallbackPageId);
+  const nextMap = updater(ensured.map);
 
   return touchVault({
-    ...vault,
-    maps: [updater(firstMap), ...vault.maps.slice(1)],
+    ...ensured.vault,
+    maps: ensured.vault.maps.map((map) => (map.id === ensured.map.id ? nextMap : map)),
   });
+}
+
+function buildSequentialDiagramEdges(nodeCount: number) {
+  return Array.from({ length: Math.max(nodeCount - 1, 0) }, (_value, index): { sourceIndex: number; targetIndex: number; label?: string } => ({
+    sourceIndex: index,
+    targetIndex: index + 1,
+  }));
+}
+
+function normalizeGeneratedEdges(
+  nodeCount: number,
+  edges: Array<{ sourceIndex: number; targetIndex: number; label?: string }> | undefined,
+) {
+  const candidates = edges && edges.length > 0 ? edges : buildSequentialDiagramEdges(nodeCount);
+
+  return candidates.filter((edge) =>
+    Number.isInteger(edge.sourceIndex) &&
+    Number.isInteger(edge.targetIndex) &&
+    edge.sourceIndex >= 0 &&
+    edge.targetIndex >= 0 &&
+    edge.sourceIndex < nodeCount &&
+    edge.targetIndex < nodeCount &&
+    edge.sourceIndex !== edge.targetIndex,
+  );
+}
+
+function layoutGeneratedDiagram(
+  mode: 'flowchart',
+  title: string,
+  nodes: Array<{ label: string; summary?: string; tone?: MindNodeData['tone']; shape?: MindNodeData['shape'] }>,
+  edges: Array<{ sourceIndex: number; targetIndex: number; label?: string }> | undefined,
+  fallbackPageId?: string,
+): { title: string; layout: MapDocument['layout']; nodes: MindMapNode[]; edges: MindMapEdge[] } {
+  if (nodes.length === 0) {
+    return {
+      title,
+      layout: 'sequence',
+      nodes: [createRootNodeForMode(mode, fallbackPageId)],
+      edges: [] as MindMapEdge[],
+    };
+  }
+
+  const normalizedEdges = normalizeGeneratedEdges(nodes.length, edges);
+  const outgoing = new Map<number, number[]>();
+  const indegree = new Array<number>(nodes.length).fill(0);
+
+  normalizedEdges.forEach((edge) => {
+    const list = outgoing.get(edge.sourceIndex) ?? [];
+    list.push(edge.targetIndex);
+    outgoing.set(edge.sourceIndex, list);
+    indegree[edge.targetIndex] += 1;
+  });
+
+  const depth = new Array<number>(nodes.length).fill(-1);
+  const queue: number[] = [];
+  const roots = indegree
+    .map((value, index) => ({ value, index }))
+    .filter((item) => item.value === 0)
+    .map((item) => item.index);
+
+  (roots.length > 0 ? roots : [0]).forEach((rootIndex) => {
+    if (depth[rootIndex] === -1) {
+      depth[rootIndex] = 0;
+      queue.push(rootIndex);
+    }
+  });
+
+  while (queue.length > 0) {
+    const currentIndex = queue.shift();
+    if (currentIndex === undefined) {
+      continue;
+    }
+
+    (outgoing.get(currentIndex) ?? []).forEach((targetIndex) => {
+      const nextDepth = depth[currentIndex] + 1;
+      if (depth[targetIndex] < nextDepth) {
+        depth[targetIndex] = nextDepth;
+        queue.push(targetIndex);
+      }
+    });
+  }
+
+  depth.forEach((value, index) => {
+    if (value === -1) {
+      depth[index] = 0;
+    }
+  });
+
+  const nodesByDepth = new Map<number, number[]>();
+  depth.forEach((value, index) => {
+    const list = nodesByDepth.get(value) ?? [];
+    list.push(index);
+    nodesByDepth.set(value, list);
+  });
+
+  const createdNodes = nodes.map((node, index) => {
+    const currentDepth = depth[index] ?? 0;
+    const peers = nodesByDepth.get(currentDepth) ?? [index];
+    const order = peers.indexOf(index);
+    const centeredOffset = order - (peers.length - 1) / 2;
+
+    return {
+      id: createId('node'),
+      type: 'brainNode',
+      position: {
+        x: centeredOffset * 260,
+        y: currentDepth * 150,
+      },
+      data: {
+        label: node.label,
+        summary: node.summary,
+        tone: node.tone ?? 'sky',
+        shape: node.shape ?? (index === 0 || index === nodes.length - 1 ? 'start-end' : 'rect'),
+      },
+    } satisfies MindMapNode;
+  });
+
+  const createdEdges = normalizedEdges.reduce<MindMapEdge[]>((collection, edge) => {
+      const source = createdNodes[edge.sourceIndex];
+      const target = createdNodes[edge.targetIndex];
+      if (!source || !target) {
+        return collection;
+      }
+
+      collection.push({
+        id: createId('edge'),
+        source: source.id,
+        target: target.id,
+        type: 'smoothstep',
+        label: edge.label,
+      });
+
+      return collection;
+    }, []);
+
+  return {
+    title,
+    layout: 'sequence' as const,
+    nodes: createdNodes,
+    edges: createdEdges,
+  };
 }
 
 const initialVault = createStarterVault();
@@ -262,7 +466,24 @@ export const useBrainStore = create<BrainState>((set, get) => ({
   selectedMapNodeId: initialVault.maps[0]?.nodes[0]?.id,
   isCommandPaletteOpen: false,
   isSettingsOpen: false,
-  setActiveView: (activeView) => set({ activeView }),
+  setActiveView: (activeView) =>
+    set((state) => {
+      const mode = getDiagramModeForView(activeView);
+      if (!mode) {
+        return { activeView };
+      }
+
+      const ensured = ensureMapDocument(state.vault, mode, state.vault.pages[0]?.id);
+      const selectedMapNodeId =
+        ensured.map.nodes.find((node) => node.id === state.selectedMapNodeId)?.id ??
+        ensured.map.nodes[0]?.id;
+
+      return {
+        activeView,
+        vault: ensured.vault,
+        selectedMapNodeId,
+      };
+    }),
   setVault: (vault, vaultPath) => {
     const normalizedVault = normalizeVault(vault);
     set((state) => ({
@@ -274,9 +495,11 @@ export const useBrainStore = create<BrainState>((set, get) => ({
           ? state.selectedPageId
           : normalizedVault.pages[0]?.id ?? '',
       selectedMapNodeId:
-        normalizedVault.maps[0]?.nodes.some((node) => node.id === state.selectedMapNodeId)
+        (findMapByMode(normalizedVault, getDiagramModeForView(state.activeView) ?? 'mind-map')?.nodes ?? normalizedVault.maps[0]?.nodes ?? [])
+          .some((node) => node.id === state.selectedMapNodeId)
           ? state.selectedMapNodeId
-          : normalizedVault.maps[0]?.nodes[0]?.id,
+          : (findMapByMode(normalizedVault, getDiagramModeForView(state.activeView) ?? 'mind-map')?.nodes[0]?.id ??
+            normalizedVault.maps[0]?.nodes[0]?.id),
     }));
   },
   setChatSettings: (settings) =>
@@ -286,190 +509,10 @@ export const useBrainStore = create<BrainState>((set, get) => ({
         ...settings,
       },
     })),
-  setSelectedPage: (selectedPageId) => set({ selectedPageId, activeView: 'notes' }),
   setSelectedMapNode: (selectedMapNodeId) => set({ selectedMapNodeId }),
-  createPage: (title = 'Untitled', content = 'Start writing here.', tags = []) => {
-    const { vault } = get();
-    const now = new Date().toISOString();
-    const id = createId('page');
-    const page: KnowledgePage = {
-      id,
-      title,
-      icon: title.slice(0, 1).toUpperCase() || 'N',
-      tags,
-      createdAt: now,
-      updatedAt: now,
-      links: [],
-      metadata: {
-        status: 'draft',
-      },
-      blocks: [
-        {
-          id: createId('block'),
-          type: 'heading',
-          content: title,
-        },
-        {
-          id: createId('block'),
-          type: 'paragraph',
-          content,
-        },
-      ],
-    };
-
-    set({
-      vault: touchVault({
-        ...vault,
-        pages: [page, ...vault.pages],
-      }),
-      selectedPageId: id,
-      activeView: 'notes',
-    });
-
-    return id;
-  },
-  deletePage: (pageId) => {
-    const { vault, selectedPageId } = get();
-    const pageToDelete = vault.pages.find((page) => page.id === pageId);
-
-    if (!pageToDelete || vault.pages.length <= 1) {
-      return;
-    }
-
-    const remainingPages = vault.pages.filter((page) => page.id !== pageId);
-    const nextSelectedPageId =
-      selectedPageId === pageId ? remainingPages[0]?.id ?? selectedPageId : selectedPageId;
-
-    set({
-      vault: touchVault({
-        ...vault,
-        pages: remainingPages,
-        relationships: vault.relationships.filter(
-          (relationship) => relationship.sourceId !== pageId && relationship.targetId !== pageId,
-        ),
-        tasks: vault.tasks.map((task) => ({
-          ...task,
-          linkedPageIds: task.linkedPageIds.filter((linkedPageId) => linkedPageId !== pageId),
-        })),
-        maps: vault.maps.map((map) => ({
-          ...map,
-          nodes: map.nodes.map((node) =>
-            node.data.noteId === pageId
-              ? {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    noteId: undefined,
-                  },
-                }
-              : node,
-          ),
-        })),
-      }),
-      selectedPageId: nextSelectedPageId,
-      activeView: 'notes',
-    });
-  },
-  createPageFromNode: (nodeId) => {
-    const { vault } = get();
-    const map = normalizeMap(vault.maps[0], vault.pages[0]?.id);
-    const sourceNode = map.nodes.find((node) => node.id === nodeId);
-
-    if (!sourceNode) {
-      return null;
-    }
-
-    if (sourceNode.data.noteId) {
-      set({
-        selectedPageId: sourceNode.data.noteId,
-        activeView: 'notes',
-      });
-      return sourceNode.data.noteId;
-    }
-
-    const pageId = createId('page');
-    const now = new Date().toISOString();
-    const title = sourceNode.data.label.trim() || 'Untitled note';
-    const page: KnowledgePage = {
-      id: pageId,
-      title,
-      icon: title.slice(0, 1).toUpperCase() || 'N',
-      tags: ['mind-map'],
-      createdAt: now,
-      updatedAt: now,
-      links: [],
-      metadata: {
-        sourceNodeId: nodeId,
-      },
-      blocks: [
-        {
-          id: createId('block'),
-          type: 'heading',
-          content: title,
-        },
-        {
-          id: createId('block'),
-          type: 'paragraph',
-          content: sourceNode.data.summary?.trim() || 'Start writing your idea here.',
-        },
-      ],
-    };
-
-    set({
-      vault: updateFirstMap(
-        touchVault({
-          ...vault,
-          pages: [page, ...vault.pages],
-        }),
-        (currentMap) => {
-          const safeMap = normalizeMap(currentMap, vault.pages[0]?.id);
-
-          return {
-            ...safeMap,
-            nodes: safeMap.nodes.map((node) =>
-              node.id === nodeId
-                ? {
-                    ...node,
-                    data: {
-                      ...node.data,
-                      noteId: pageId,
-                    },
-                  }
-                : node,
-            ),
-            updatedAt: new Date().toISOString(),
-          };
-        },
-      ),
-      selectedPageId: pageId,
-      activeView: 'notes',
-    });
-
-    return pageId;
-  },
-  createTask: (title, priority = 'medium') => {
-    const { vault, selectedPageId } = get();
-    const task: TaskItem = {
-      id: createId('task'),
-      title,
-      status: 'active',
-      priority,
-      linkedPageIds: selectedPageId ? [selectedPageId] : [],
-    };
-
-    set({
-      vault: touchVault({
-        ...vault,
-        tasks: [task, ...vault.tasks],
-      }),
-      activeView: 'tasks',
-    });
-
-    return task.id;
-  },
   addMindNode: (label = 'New idea', summary = 'Double-click linked nodes to open notes', position, mode = 'child') => {
     const { vault, selectedMapNodeId } = get();
-    const map = normalizeMap(vault.maps[0], vault.pages[0]?.id);
+    const map = normalizeMap(findMapByMode(vault, 'mind-map'), vault.pages[0]?.id);
     const id = createId('node');
 
     if (!map) {
@@ -521,7 +564,7 @@ export const useBrainStore = create<BrainState>((set, get) => ({
         : undefined;
 
     set({
-      vault: updateFirstMap(vault, (currentMap) => {
+      vault: updateMapByMode(vault, 'mind-map', (currentMap) => {
         const safeMap = normalizeMap(currentMap, vault.pages[0]?.id);
 
         return {
@@ -545,7 +588,7 @@ export const useBrainStore = create<BrainState>((set, get) => ({
           edges: newEdge ? [...safeMap.edges, newEdge] : safeMap.edges,
           updatedAt: new Date().toISOString(),
         };
-      }),
+      }, vault.pages[0]?.id),
       activeView: 'map',
       selectedMapNodeId: id,
     });
@@ -554,7 +597,7 @@ export const useBrainStore = create<BrainState>((set, get) => ({
   },
   expandActiveMap: (title, ideas) => {
     const { vault, selectedMapNodeId } = get();
-    const map = normalizeMap(vault.maps[0], vault.pages[0]?.id);
+    const map = normalizeMap(findMapByMode(vault, 'mind-map'), vault.pages[0]?.id);
 
     const focusNode = map.nodes.find((node) => node.id === selectedMapNodeId) ?? map.nodes[0];
     const sourceId = focusNode?.id ?? map.nodes[0]?.id;
@@ -599,7 +642,7 @@ export const useBrainStore = create<BrainState>((set, get) => ({
           }));
 
     set({
-      vault: updateFirstMap(vault, (currentMap) => {
+      vault: updateMapByMode(vault, 'mind-map', (currentMap) => {
         const safeMap = normalizeMap(currentMap, vault.pages[0]?.id);
 
         return {
@@ -608,14 +651,14 @@ export const useBrainStore = create<BrainState>((set, get) => ({
           edges: [...safeMap.edges, ...newEdges],
           updatedAt: new Date().toISOString(),
         };
-      }),
+      }, vault.pages[0]?.id),
       activeView: 'map',
     });
   },
   updateMindNode: (nodeId, patch) => {
     const { vault } = get();
     set({
-      vault: updateFirstMap(vault, (currentMap) => {
+      vault: updateMapByMode(vault, 'mind-map', (currentMap) => {
         const safeMap = normalizeMap(currentMap, vault.pages[0]?.id);
 
         return {
@@ -633,12 +676,12 @@ export const useBrainStore = create<BrainState>((set, get) => ({
           ),
           updatedAt: new Date().toISOString(),
         };
-      }),
+      }, vault.pages[0]?.id),
     });
   },
   deleteMindNode: (nodeId) => {
     const { vault } = get();
-    const map = normalizeMap(vault.maps[0], vault.pages[0]?.id);
+    const map = normalizeMap(findMapByMode(vault, 'mind-map'), vault.pages[0]?.id);
     const rootNodeId = map.nodes[0]?.id;
     const parentNodeId = map.edges.find((edge) => edge.target === nodeId)?.source ?? rootNodeId;
 
@@ -669,7 +712,7 @@ export const useBrainStore = create<BrainState>((set, get) => ({
     }
 
     set({
-      vault: updateFirstMap(vault, (currentMap) => {
+      vault: updateMapByMode(vault, 'mind-map', (currentMap) => {
         const safeMap = normalizeMap(currentMap, vault.pages[0]?.id);
 
         return {
@@ -678,18 +721,18 @@ export const useBrainStore = create<BrainState>((set, get) => ({
           edges: safeMap.edges.filter((edge) => !nodeIdsToRemove.has(edge.source) && !nodeIdsToRemove.has(edge.target)),
           updatedAt: new Date().toISOString(),
         };
-      }),
+      }, vault.pages[0]?.id),
       selectedMapNodeId: parentNodeId,
       activeView: 'map',
     });
   },
   clearMindMap: () => {
     const { vault } = get();
-    const map = normalizeMap(vault.maps[0], vault.pages[0]?.id);
+    const map = normalizeMap(findMapByMode(vault, 'mind-map'), vault.pages[0]?.id);
     const rootNodeId = map.nodes[0]?.id;
 
     set({
-      vault: updateFirstMap(vault, (currentMap) => {
+      vault: updateMapByMode(vault, 'mind-map', (currentMap) => {
         const safeMap = normalizeMap(currentMap, vault.pages[0]?.id);
         const existingRoot = safeMap.nodes[0];
         const rootNode = existingRoot
@@ -702,7 +745,7 @@ export const useBrainStore = create<BrainState>((set, get) => ({
                 collapsed: false,
               },
             }
-          : createRootMapNode(vault.pages[0]?.id);
+          : createRootNodeForMode('mind-map', vault.pages[0]?.id);
 
         return {
           ...safeMap,
@@ -710,14 +753,15 @@ export const useBrainStore = create<BrainState>((set, get) => ({
           edges: [],
           updatedAt: new Date().toISOString(),
         };
-      }),
+      }, vault.pages[0]?.id),
       selectedMapNodeId: rootNodeId,
       activeView: 'map',
     });
   },
   updateMapNodes: (mapId, nodes) => {
     const { vault, selectedMapNodeId } = get();
-    const safeNodes = nodes.length > 0 ? nodes : [createRootMapNode(vault.pages[0]?.id)];
+    const map = vault.maps.find((entry) => entry.id === mapId);
+    const safeNodes = nodes.length > 0 ? nodes : [createRootNodeForMode((map?.mode as Extract<DiagramMode, 'mind-map' | 'flowchart' | 'stick-diagram'>) ?? 'mind-map', vault.pages[0]?.id)];
     const safeNodeIds = new Set(safeNodes.map((node) => node.id));
     set({
       vault: touchVault({
@@ -753,74 +797,58 @@ export const useBrainStore = create<BrainState>((set, get) => ({
       }),
     });
   },
+  updateDiagramNodes: (mode, nodes) => {
+    const { vault, selectedMapNodeId } = get();
+    const safeNodes = nodes.length > 0 ? nodes : [createRootNodeForMode(mode, vault.pages[0]?.id)];
+    const safeNodeIds = new Set(safeNodes.map((node) => node.id));
+
+    set({
+      vault: updateMapByMode(vault, mode, (currentMap) => ({
+        ...currentMap,
+        nodes: safeNodes,
+        edges: currentMap.edges.filter((edge) => safeNodeIds.has(edge.source) && safeNodeIds.has(edge.target)),
+        updatedAt: new Date().toISOString(),
+      }), vault.pages[0]?.id),
+      selectedMapNodeId: selectedMapNodeId && safeNodeIds.has(selectedMapNodeId) ? selectedMapNodeId : safeNodes[0]?.id,
+    });
+  },
+  updateDiagramEdges: (mode, edges) => {
+    const { vault } = get();
+    set({
+      vault: updateMapByMode(vault, mode, (currentMap) => ({
+        ...currentMap,
+        edges,
+        updatedAt: new Date().toISOString(),
+      }), vault.pages[0]?.id),
+    });
+  },
+  clearDiagram: (mode) => {
+    const { vault } = get();
+    const fallbackNode = createRootNodeForMode(mode, vault.pages[0]?.id);
+
+    set({
+      vault: updateMapByMode(vault, mode, (currentMap) => ({
+        ...currentMap,
+        title: 'Flowchart',
+        nodes: [fallbackNode],
+        edges: [],
+        updatedAt: new Date().toISOString(),
+      }), vault.pages[0]?.id),
+      selectedMapNodeId: fallbackNode.id,
+      activeView: 'flowchart',
+    });
+  },
   applyAgentResult: (result) => {
     const { vault, selectedPageId } = get();
     let nextVault = vault;
     let nextView: WorkspaceView = 'map';
     let nextSelectedPageId = selectedPageId;
+    let nextSelectedMapNodeId = get().selectedMapNodeId;
 
     for (const action of result.actions) {
-      if (action.type === 'create-note') {
-        const now = new Date().toISOString();
-        const id = createId('page');
-        const title = action.payload?.title ?? 'AI Note';
-        const page: KnowledgePage = {
-          id,
-          title,
-          icon: title.slice(0, 1).toUpperCase() || 'A',
-          tags: action.payload?.tags ?? ['ai-generated'],
-          createdAt: now,
-          updatedAt: now,
-          links: [],
-          metadata: {
-            source: 'agent',
-          },
-          blocks: [
-            {
-              id: createId('block'),
-              type: 'heading',
-              content: title,
-            },
-            {
-              id: createId('block'),
-              type: 'paragraph',
-              content: action.payload?.content ?? result.body,
-            },
-          ],
-        };
-        nextVault = touchVault({ ...nextVault, pages: [page, ...nextVault.pages] });
-        nextSelectedPageId = id;
-        nextView = 'notes';
-      }
-
-      if (action.type === 'create-task' && action.payload?.task) {
-        const task: TaskItem = {
-          id: createId('task'),
-          title: action.payload.task.title,
-          status: 'active',
-          priority: action.payload.task.priority ?? 'medium',
-          dueDate: action.payload.task.dueDate,
-          linkedPageIds: nextSelectedPageId ? [nextSelectedPageId] : [],
-        };
-        nextVault = touchVault({ ...nextVault, tasks: [task, ...nextVault.tasks] });
-        nextView = 'tasks';
-      }
-
-      if (action.type === 'link-notes' && action.payload?.sourceId && action.payload.targetId) {
-        const relationship: Relationship = {
-          id: createId('rel'),
-          sourceId: action.payload.sourceId,
-          targetId: action.payload.targetId,
-          type: 'reference',
-          strength: 0.72,
-          createdAt: new Date().toISOString(),
-        };
-        nextVault = touchVault({ ...nextVault, relationships: [relationship, ...nextVault.relationships] });
-        nextView = 'graph';
-      }
 
       if (action.type === 'create-map-nodes') {
-        const map = normalizeMap(nextVault.maps[0], nextVault.pages[0]?.id);
+        const map = normalizeMap(findMapByMode(nextVault, 'mind-map'), nextVault.pages[0]?.id);
 
         const root = map.nodes[0];
         const branches = action.payload?.nodes ?? [];
@@ -837,6 +865,7 @@ export const useBrainStore = create<BrainState>((set, get) => ({
               label: branch.label,
               summary: branch.summary ?? `AI branch for ${action.payload?.title ?? 'idea'}`,
               tone: branch.tone ?? 'teal',
+              shape: branch.shape,
             },
           } satisfies MindMapNode;
         });
@@ -852,7 +881,7 @@ export const useBrainStore = create<BrainState>((set, get) => ({
             }))
           : [];
 
-        nextVault = updateFirstMap(nextVault, (currentMap) => {
+        nextVault = updateMapByMode(nextVault, 'mind-map', (currentMap) => {
           const safeMap = normalizeMap(currentMap, nextVault.pages[0]?.id);
 
           return {
@@ -861,8 +890,31 @@ export const useBrainStore = create<BrainState>((set, get) => ({
             edges: [...safeMap.edges, ...newEdges],
             updatedAt: new Date().toISOString(),
           };
-        });
+        }, nextVault.pages[0]?.id);
         nextView = 'map';
+        nextSelectedMapNodeId = newNodes[0]?.id ?? root?.id;
+      }
+
+      if (action.type === 'create-diagram') {
+        const diagramMode = 'flowchart' as const;
+        const generatedDiagram = layoutGeneratedDiagram(
+          diagramMode,
+          action.payload?.title ?? 'AI Flowchart',
+          action.payload?.nodes ?? [],
+          action.payload?.edges,
+          nextVault.pages[0]?.id,
+        );
+
+        nextVault = updateMapByMode(nextVault, diagramMode, (currentMap) => ({
+          ...currentMap,
+          title: generatedDiagram.title,
+          layout: generatedDiagram.layout,
+          nodes: generatedDiagram.nodes,
+          edges: generatedDiagram.edges,
+          updatedAt: new Date().toISOString(),
+        }), nextVault.pages[0]?.id);
+        nextView = 'flowchart';
+        nextSelectedMapNodeId = generatedDiagram.nodes[0]?.id;
       }
     }
 
@@ -875,134 +927,12 @@ export const useBrainStore = create<BrainState>((set, get) => ({
       vault: nextVault,
       activeView: nextView,
       selectedPageId: nextSelectedPageId,
+      selectedMapNodeId: nextSelectedMapNodeId,
     });
 
     return appliedResult;
   },
-  updateSelectedPageContent: (html) => {
-    const { vault, selectedPageId } = get();
-    const pages: KnowledgePage[] = vault.pages.map((page) => {
-      if (page.id !== selectedPageId) {
-        return page;
-      }
 
-      const blocks = editorHtmlToBlocks(html, page.title);
-      const firstHeading = blocks.find((block) => block.type === 'heading');
-      const nextTitle = firstHeading?.content?.trim() || page.title;
-
-      return {
-        ...page,
-        title: nextTitle,
-        icon: nextTitle.slice(0, 1).toUpperCase() || page.icon,
-        updatedAt: new Date().toISOString(),
-        blocks,
-        metadata: {
-          ...page.metadata,
-          editorHtml: html,
-        },
-      };
-    });
-
-    const updatedPage = pages.find((page) => page.id === selectedPageId);
-
-    set({
-      vault: touchVault({
-        ...vault,
-        pages,
-        maps: vault.maps.map((map) => ({
-          ...map,
-          nodes: map.nodes.map((node) =>
-            node.data.noteId === selectedPageId && updatedPage
-              ? {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    label: updatedPage.title,
-                  },
-                }
-              : node,
-          ),
-        })),
-      }),
-    });
-  },
-  updatePageMeta: (pageId, updates) => {
-    const { vault } = get();
-    const pages = vault.pages.map((page) => {
-      if (page.id !== pageId) {
-        return page;
-      }
-
-      const nextTitle = updates.title?.trim() || page.title;
-      const nextBlocks =
-        updates.title?.trim()
-          ? page.blocks.some((block) => block.type === 'heading')
-            ? page.blocks.map((block, index) =>
-                index === page.blocks.findIndex((candidate) => candidate.type === 'heading')
-                  ? {
-                      ...block,
-                      content: nextTitle,
-                    }
-                  : block,
-              )
-            : [
-                {
-                  id: createId('block'),
-                  type: 'heading' as const,
-                  content: nextTitle,
-                },
-                ...page.blocks,
-              ]
-          : page.blocks;
-
-      return {
-        ...page,
-        title: nextTitle,
-        icon: updates.icon ?? (nextTitle.slice(0, 1).toUpperCase() || page.icon),
-        tags: updates.tags ?? page.tags,
-        updatedAt: new Date().toISOString(),
-        blocks: nextBlocks,
-        metadata: updates.title?.trim()
-          ? {
-              ...page.metadata,
-              editorHtml: replaceEditorHtmlTitle(
-                typeof page.metadata.editorHtml === 'string' && page.metadata.editorHtml.trim()
-                  ? page.metadata.editorHtml
-                  : page.blocks.map((block) => {
-                      if (block.type === 'heading') {
-                        return `<h2>${block.content}</h2>`;
-                      }
-
-                      return `<p>${block.content}</p>`;
-                    }).join(''),
-                nextTitle,
-              ),
-            }
-          : page.metadata,
-      };
-    });
-
-    set({
-      vault: touchVault({
-        ...vault,
-        pages,
-        maps: vault.maps.map((map) => ({
-          ...map,
-          nodes: map.nodes.map((node) =>
-            node.data.noteId === pageId && updates.title?.trim()
-              ? {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    label: updates.title.trim(),
-                  },
-                }
-              : node,
-          ),
-        })),
-      }),
-    });
-  },
   updateSettings: (settings) => {
     const { vault } = get();
     set({

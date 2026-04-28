@@ -15,14 +15,10 @@ const toneOptions: Array<{ value: MindNodeData['tone']; label: string }> = [
 
 export function MapInspector() {
   const map = useBrainStore((s) => s.vault.maps[0]);
-  const pages = useBrainStore((s) => s.vault.pages);
   const selectedMapNodeId = useBrainStore((s) => s.selectedMapNodeId);
-  const setSelectedPage = useBrainStore((s) => s.setSelectedPage);
   const addMindNode = useBrainStore((s) => s.addMindNode);
   const updateMindNode = useBrainStore((s) => s.updateMindNode);
   const deleteMindNode = useBrainStore((s) => s.deleteMindNode);
-  const clearMindMap = useBrainStore((s) => s.clearMindMap);
-  const createPageFromNode = useBrainStore((s) => s.createPageFromNode);
   const updateMapEdges = useBrainStore((s) => s.updateMapEdges);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -30,15 +26,11 @@ export function MapInspector() {
     () => map?.nodes.find((n) => n.id === selectedMapNodeId) ?? map?.nodes[0],
     [map?.nodes, selectedMapNodeId],
   );
-  const linkedPage = useMemo(
-    () => pages.find((p) => p.id === selectedNode?.data.noteId),
-    [pages, selectedNode?.data.noteId],
-  );
+
   const hasChildren = useMemo(
     () => map.edges.some((e) => e.source === selectedNode?.id),
     [map.edges, selectedNode?.id],
   );
-  const canClearMap = map.nodes.length > 1 || map.edges.length > 0;
   const hasParentEdge = useMemo(
     () => map.edges.some((e) => e.target === selectedNode?.id),
     [map.edges, selectedNode?.id],
@@ -80,7 +72,7 @@ export function MapInspector() {
       <div className="side-panel-header">
         <div>
           <h3>Selected node</h3>
-          <p>{linkedPage ? `Linked to ${linkedPage.title}` : 'No note linked yet'}</p>
+          <p>Edit node details below</p>
         </div>
       </div>
 
@@ -131,16 +123,7 @@ export function MapInspector() {
             <ChevronsUpDown size={14} />
             <span>{selectedNode.data.collapsed ? 'Expand' : 'Collapse'}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              const pageId = createPageFromNode(selectedNode.id);
-              if (pageId) setSelectedPage(pageId);
-            }}
-          >
-            <FileText size={14} />
-            <span>{linkedPage ? 'Open note' : 'Create note'}</span>
-          </button>
+
           <button type="button" onClick={() => fileInputRef.current?.click()}>
             <Image size={14} />
             <span>Attach file</span>
@@ -186,12 +169,7 @@ export function MapInspector() {
           </button>
         ) : null}
 
-        {linkedPage ? (
-          <button className="linked-note-row" type="button" onClick={() => setSelectedPage(linkedPage.id)}>
-            <Link2 size={14} />
-            <span>{linkedPage.title}</span>
-          </button>
-        ) : null}
+
       </div>
     </section>
   );

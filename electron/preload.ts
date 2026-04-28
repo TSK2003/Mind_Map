@@ -16,8 +16,9 @@ interface AgentRequest {
   vault: BrainVault;
   selectedPageId?: string;
   actionPlan?: string;
+  activeView?: 'map' | 'notes' | 'graph' | 'tasks' | 'dashboard' | 'flowchart' | 'stickDiagram';
   chatSettings?: {
-    provider: 'local' | 'openai-compatible' | 'none';
+    provider: 'local' | 'openai' | 'openai-compatible' | 'none';
     baseUrl?: string;
     apiKey?: string;
     model?: string;
@@ -25,10 +26,14 @@ interface AgentRequest {
 }
 
 interface AgentTextResponse {
-  provider: 'ollama' | 'openai-compatible' | 'local';
+  provider: 'ollama' | 'openai' | 'openai-compatible' | 'local';
   model?: string;
   title: string;
   body: string;
+  actions?: Array<{
+    id: string;
+    type: 'create-note' | 'create-map-nodes' | 'create-diagram' | 'create-task';
+  }>;
 }
 
 const mindMapApi = {

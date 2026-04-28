@@ -1,4 +1,4 @@
-import type { AgentAction, AgentResult, AgentTextResponse, BrainVault, KnowledgePage } from '../domain/types';
+import type { AgentAction, AgentResult, AgentTextResponse, BrainVault, KnowledgePage, WorkspaceView } from '../domain/types';
 
 const tones = ['teal', 'amber', 'sky', 'violet', 'rose', 'lime'] as const;
 
@@ -7,10 +7,7 @@ function createId(prefix: string) {
 }
 
 function pageText(page: KnowledgePage) {
-  return page.blocks
-    .map((block) => block.content)
-    .filter(Boolean)
-    .join(' ');
+  return page.blocks.map((block) => block.content).filter(Boolean).join(' ');
 }
 
 function titleFromPrompt(prompt: string) {
@@ -18,36 +15,22 @@ function titleFromPrompt(prompt: string) {
     .replace(/\b(generate|create|make|build|mind map|map|note|task|plan|for|about|from|please)\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-
-  if (!cleaned) {
-    return 'New Idea';
-  }
-
-  return cleaned
-    .split(' ')
-    .slice(0, 7)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  if (!cleaned) return 'New Idea';
+  return cleaned.split(' ').slice(0, 7).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
 function splitIdeas(prompt: string, vault: BrainVault) {
   const selectedTerms = prompt
     .replace(/[^\w\s,.-]/g, ' ')
-    .split(/[,.\n]| and | with | for /i)
+    .split(/[,.\n]| and | with | for | then | after | before /i)
     .map((item) => item.trim())
     .filter((item) => item.length > 2)
-    .slice(0, 5);
+    .slice(0, 6);
 
-  if (selectedTerms.length >= 3) {
-    return selectedTerms;
-  }
+  if (selectedTerms.length >= 3) return selectedTerms;
 
-  const vaultTopics = vault.pages
-    .flatMap((page) => [page.title, ...page.tags])
-    .filter(Boolean)
-    .slice(0, 4);
-
-  return [...selectedTerms, ...vaultTopics, 'Research', 'Execution', 'Next Actions'].slice(0, 6);
+  const vaultTopics = vault.pages.flatMap((page) => [page.title, ...page.tags]).filter(Boolean).slice(0, 4);
+  return [...selectedTerms, ...vaultTopics, 'Review', 'Execution', 'Next Actions'].slice(0, 6);
 }
 
 function findRelevantPages(prompt: string, vault: BrainVault) {
@@ -59,98 +42,73 @@ function findRelevantPages(prompt: string, vault: BrainVault) {
       return { page, score };
     })
     .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .sort((left, right) => right.score - left.score)
     .map((item) => item.page)
     .slice(0, 4);
 }
 
-export function planAgentActions(prompt: string, vault: BrainVault, selectedPageId?: string): AgentAction[] {
+function toTitleCase(value: string) {
+  return value.split(/\s+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function getRequestedDiagramType(prompt: string, activeView?: WorkspaceView) {
   const normalizedPrompt = prompt.toLowerCase();
+  if (/flow\s*chart|flowchart|workflow diagram|process diagram|workflow|steps|process/.test(normalizedPrompt) || activeView === 'flowchart') {
+    return 'flowchart' as const;
+  }
+  return 'mind-map' as const;
+}
+
+function getFlowShape(label: string, index: number, lastIndex: number) {
+  const normalized = label.toLowerCase();
+  if (index === 0 || index === lastIndex) return 'start-end' as const;
+  if (/(decide|approve|review|choice|if|branch|check)/.test(normalized)) return 'diamond' as const;
+  if (/(input|capture|collect|receive)/.test(normalized)) return 'parallelogram' as const;
+  if (/(database|store|save|record)/.test(normalized)) return 'cylinder' as const;
+  if (/(document|report|export)/.test(normalized)) return 'document' as const;
+  return 'rect' as const;
+}
+
+function buildWorkflowNodes(prompt: string, vault: BrainVault, diagramType: 'mind-map' | 'flowchart') {
+  const title = titleFromPrompt(prompt);
+  const terms = splitIdeas(prompt, vault);
+
+  if (diagramType === 'mind-map') {
+    return terms.map((idea, index) => ({
+      label: toTitleCase(idea),
+      summary: `AI branch for ${title}`,
+      tone: tones[index % tones.length],
+    }));
+  }
+
+  const steps = ['Start', ...terms.map((term) => toTitleCase(term)), 'Finish'];
+  return steps.map((step, index) => ({
+    label: step,
+    summary: `Workflow step for ${title}`,
+    tone: tones[index % tones.length],
+    shape: getFlowShape(step, index, steps.length - 1),
+  }));
+}
+
+export function planAgentActions(prompt: string, vault: BrainVault, _selectedPageId?: string, activeView?: WorkspaceView): AgentAction[] {
   const actions: AgentAction[] = [];
   const title = titleFromPrompt(prompt);
+  const diagramType = getRequestedDiagramType(prompt, activeView);
+  const workflowNodes = buildWorkflowNodes(prompt, vault, diagramType);
 
-  if (/(mind\s*map|map|brainstorm|visual|xmind|flowchart)/i.test(normalizedPrompt)) {
+  if (diagramType === 'mind-map') {
     actions.push({
       id: createId('agent-action'),
       type: 'create-map-nodes',
       label: `Generate mind map: ${title}`,
-      payload: {
-        title,
-        nodes: splitIdeas(prompt, vault).map((idea, index) => ({
-          label: idea.charAt(0).toUpperCase() + idea.slice(1),
-          summary: `AI branch for ${title}`,
-          tone: tones[index % tones.length],
-        })),
-      },
+      payload: { title, diagramType, nodes: workflowNodes },
     });
-  }
-
-  if (/(note|document|write|outline|summary|summarize)/i.test(normalizedPrompt)) {
+  } else {
     actions.push({
       id: createId('agent-action'),
-      type: 'create-note',
-      label: `Create note: ${title}`,
-      payload: {
-        title,
-        content: `AI generated working note for: ${prompt}`,
-        tags: ['ai-generated', 'mind-map'],
-      },
-    });
-  }
-
-  if (/(task|todo|plan|project|roadmap|next step|schedule)/i.test(normalizedPrompt)) {
-    actions.push({
-      id: createId('agent-action'),
-      type: 'create-task',
-      label: `Create task: ${title}`,
-      payload: {
-        task: {
-          title: `Work on ${title}`,
-          priority: normalizedPrompt.includes('urgent') ? 'high' : 'medium',
-        },
-      },
-    });
-  }
-
-  if (/(link|connect|backlink|relationship|relate)/i.test(normalizedPrompt)) {
-    const relevant = findRelevantPages(prompt, vault);
-    if (relevant.length >= 2) {
-      actions.push({
-        id: createId('agent-action'),
-        type: 'link-notes',
-        label: `Link ${relevant[0].title} to ${relevant[1].title}`,
-        payload: {
-          sourceId: selectedPageId ?? relevant[0].id,
-          targetId: relevant[1].id,
-        },
-      });
-    }
-  }
-
-  if (/(ask|find|search|where|what|which)/i.test(normalizedPrompt)) {
-    actions.push({
-      id: createId('agent-action'),
-      type: 'search',
-      label: `Search vault for "${prompt.slice(0, 48)}"`,
-      payload: {
-        query: prompt,
-      },
-    });
-  }
-
-  if (actions.length === 0) {
-    actions.push({
-      id: createId('agent-action'),
-      type: 'create-map-nodes',
-      label: `Expand idea: ${title}`,
-      payload: {
-        title,
-        nodes: splitIdeas(prompt, vault).map((idea, index) => ({
-          label: idea.charAt(0).toUpperCase() + idea.slice(1),
-          summary: 'Expanded by Mind Map agent',
-          tone: tones[index % tones.length],
-        })),
-      },
+      type: 'create-diagram',
+      label: `Generate flowchart: ${title}`,
+      payload: { title, diagramType, nodes: workflowNodes },
     });
   }
 
@@ -166,9 +124,8 @@ export function buildOfflineAgentText(prompt: string, vault: BrainVault, actions
   const actionText = actions.map((action) => action.label).join(', ');
   const sourceText =
     relevantPages.length > 0
-      ? `I found relevant vault context in ${relevantPages.map((page) => page.title).join(', ')}.`
-      : 'I did not find a strong existing match, so I treated this as a new idea.';
-
+      ? `I found relevant workspace context in ${relevantPages.map((page) => page.title).join(', ')}.`
+      : 'I did not find a strong existing match, so I treated this as a new workflow request.';
   return `${sourceText} I prepared these app actions: ${actionText}.`;
 }
 
@@ -179,16 +136,14 @@ export function createAgentResult(
   textResponse?: AgentTextResponse,
 ) {
   const fallback = buildOfflineAgentText(prompt, vault, actions);
-
   return {
     id: createId('agent-result'),
-    title: textResponse?.title ?? 'Mind Map agent',
+    title: textResponse?.title ?? 'Workflow copilot',
     body: textResponse?.body?.trim() || fallback,
     provider: textResponse?.provider ?? 'local',
     model: textResponse?.model,
-    actions,
+    actions: textResponse?.actions?.length ? textResponse.actions : actions,
     createdAt: new Date().toISOString(),
     applied: false,
   } satisfies AgentResult;
 }
-

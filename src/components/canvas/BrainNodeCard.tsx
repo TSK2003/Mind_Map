@@ -9,8 +9,7 @@ export function BrainNodeCard({
   hasParentEdge,
   onPointerDown,
   onSelect,
-  onOpenNote,
-  onCreateNote,
+
   onAddChild,
   onStartConnection,
   onToggleCollapse,
@@ -25,8 +24,7 @@ export function BrainNodeCard({
   hasParentEdge: boolean;
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
   onSelect: () => void;
-  onOpenNote: () => void;
-  onCreateNote: () => void;
+
   onAddChild: () => void;
   onStartConnection: () => void;
   onToggleCollapse: () => void;
@@ -42,11 +40,6 @@ export function BrainNodeCard({
       className={isSelected ? 'canvas-node is-selected' : 'canvas-node'}
       onPointerDown={onPointerDown}
       onClick={onSelect}
-      onDoubleClick={() => {
-        if (node.data.noteId) {
-          onOpenNote();
-        }
-      }}
       role="button"
       tabIndex={0}
     >
@@ -83,12 +76,7 @@ export function BrainNodeCard({
           </div>
         ) : null}
 
-        {node.data.noteId ? (
-          <div className="node-link">
-            <Link2 size={11} />
-            <span>Linked note</span>
-          </div>
-        ) : null}
+
 
         {/* Node action buttons — visible when selected */}
         {isSelected ? (
@@ -101,21 +89,7 @@ export function BrainNodeCard({
               <Waypoints size={12} />
               <span>{isPendingConnection ? 'Cancel' : 'Link'}</span>
             </button>
-            <button
-              className="brain-node-action"
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (node.data.noteId) {
-                  onOpenNote();
-                  return;
-                }
-                onCreateNote();
-              }}
-            >
-              <FileText size={12} />
-              <span>{node.data.noteId ? 'Note' : 'Note+'}</span>
-            </button>
+
             <button className="brain-node-action" type="button" onClick={(e) => { e.stopPropagation(); onAttachFile(); }}>
               <Image size={12} />
               <span>Attach</span>

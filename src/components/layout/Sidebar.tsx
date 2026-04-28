@@ -1,4 +1,4 @@
-import { FileText, GitFork, Network, Search, Settings } from 'lucide-react';
+import { CheckSquare, FileText, GanttChart, GitFork, LayoutDashboard, Network, Search, Settings, Share2, Waypoints } from 'lucide-react';
 import clsx from 'clsx';
 import type { WorkspaceView } from '../../domain/types';
 import { useBrainStore } from '../../store/useBrainStore';
@@ -7,7 +7,6 @@ import logoUrl from '../../assets/ic_launcher.png';
 const navItems: Array<{ id: WorkspaceView; label: string; icon: typeof Network }> = [
   { id: 'map', label: 'Mind Map', icon: Network },
   { id: 'flowchart', label: 'Flowchart', icon: GitFork },
-  { id: 'notes', label: 'Notes', icon: FileText },
 ];
 
 export function Sidebar() {

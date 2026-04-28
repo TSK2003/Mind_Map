@@ -1,8 +1,8 @@
-import { Download, FolderOpen, Moon, Save, Settings2, Sun, Upload } from 'lucide-react';
+import { Download, FolderOpen, Moon, Save, Settings2, Sun } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import logoUrl from '../../assets/ic_launcher.png';
 import { getDesktopApi } from '../../services/desktop';
 import { useBrainStore } from '../../store/useBrainStore';
-import logoUrl from '../../assets/ic_launcher.png';
 
 const localVaultKey = 'mindmap:vault';
 
@@ -15,13 +15,24 @@ function formatRelativeTime(date: string) {
   }).format(new Date(date));
 }
 
+function getViewLabel(view: ReturnType<typeof useBrainStore.getState>['activeView']) {
+  if (view === 'flowchart') {
+    return 'Flowchart';
+  }
+
+  return 'Mind Map';
+}
+
 export function Topbar() {
-  const vault = useBrainStore((s) => s.vault);
-  const vaultPath = useBrainStore((s) => s.vaultPath);
-  const setVault = useBrainStore((s) => s.setVault);
-  const updateSettings = useBrainStore((s) => s.updateSettings);
-  const openSettings = useBrainStore((s) => s.openSettings);
+  const activeView = useBrainStore((state) => state.activeView);
+  const vault = useBrainStore((state) => state.vault);
+  const vaultPath = useBrainStore((state) => state.vaultPath);
+  const setVault = useBrainStore((state) => state.setVault);
+  const updateSettings = useBrainStore((state) => state.updateSettings);
+  const openSettings = useBrainStore((state) => state.openSettings);
+
   const [status, setStatus] = useState(vaultPath ? 'Vault connected' : 'Local workspace');
+
   const updatedAt = useMemo(() => formatRelativeTime(vault.updatedAt), [vault.updatedAt]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDesktop = Boolean(getDesktopApi());
@@ -35,41 +46,51 @@ export function Topbar() {
     if (api) {
       try {
         const result = await api.openVault();
-        if (result) { setVault(result.vault, result.path); setStatus('Vault opened'); }
-      } catch { setStatus('Open failed'); }
+        if (result) {
+          setVault(result.vault, result.path);
+          setStatus('Vault opened');
+        }
+      } catch {
+        setStatus('Open failed');
+      }
     } else {
-      // Browser mode: trigger file input
       fileInputRef.current?.click();
     }
   }
 
-  function handleFileImport(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function handleFileImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result as string);
-        if (data && typeof data === 'object' && data.name) {
-          setVault(data);
-          setStatus(`Imported: ${data.name}`);
+        if (data && typeof data === 'object' && 'name' in data) {
+          setVault(data as typeof vault);
+          setStatus(`Imported: ${(data as { name: string }).name}`);
         } else {
           setStatus('Invalid vault file');
         }
-      } catch { setStatus('Import failed — invalid JSON'); }
+      } catch {
+        setStatus('Import failed - invalid JSON');
+      }
     };
+
     reader.readAsText(file);
-    e.target.value = '';
+    event.target.value = '';
   }
 
   function exportVault() {
     const json = JSON.stringify(vault, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${vault.name.replace(/\s+/g, '-').toLowerCase()}.brain`;
-    a.click();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${vault.name.replace(/\s+/g, '-').toLowerCase()}.brain`;
+    link.click();
     URL.revokeObjectURL(url);
     setStatus('File exported');
   }
@@ -81,12 +102,16 @@ export function Topbar() {
       setStatus('Saved in browser storage');
       return;
     }
+
     try {
-      const result = vaultPath
-        ? await api.saveVault(vaultPath, vault)
-        : await api.saveVaultAs(vault);
-      if (result) { setVault(result.vault, result.path); setStatus('Vault saved'); }
-    } catch { setStatus('Save failed'); }
+      const result = vaultPath ? await api.saveVault(vaultPath, vault) : await api.saveVaultAs(vault);
+      if (result) {
+        setVault(result.vault, result.path);
+        setStatus('Vault saved');
+      }
+    } catch {
+      setStatus('Save failed');
+    }
   }
 
   function toggleTheme() {
@@ -101,11 +126,10 @@ export function Topbar() {
         </div>
         <div>
           <h1>{vault.name}</h1>
-          <p>{status} · {updatedAt}</p>
+          <p>{getViewLabel(activeView)} - {status} - {updatedAt}</p>
         </div>
       </div>
       <div className="topbar-actions">
-        {/* Hidden file input for browser import */}
         <input
           ref={fileInputRef}
           type="file"
@@ -133,4 +157,3 @@ export function Topbar() {
     </header>
   );
 }
-

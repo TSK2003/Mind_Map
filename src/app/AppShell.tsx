@@ -1,20 +1,17 @@
 import { lazy, Suspense } from 'react';
-import { MindMapCanvas } from '../components/canvas/MindMapCanvas';
+import { AssistantPanel } from '../components/AssistantPanel';
 import { FlowchartCanvas } from '../components/canvas/FlowchartCanvas';
+import { MindMapCanvas } from '../components/canvas/MindMapCanvas';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Topbar } from '../components/layout/Topbar';
 import { useBrainStore } from '../store/useBrainStore';
-import { WorkspacePanel } from '../components/inspector/WorkspacePanel';
 
-const NotesWorkspace = lazy(async () => ({
-  default: (await import('../components/editor/NotesWorkspace')).NotesWorkspace,
-}));
 
 export function AppShell() {
-  const activeView = useBrainStore((s) => s.activeView);
+  const activeView = useBrainStore((state) => state.activeView);
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell view-${activeView}`}>
       <Sidebar />
       <section className="workspace">
         <Topbar />
@@ -22,13 +19,8 @@ export function AppShell() {
           <section className="primary-pane">
             {activeView === 'map' ? <MindMapCanvas /> : null}
             {activeView === 'flowchart' ? <FlowchartCanvas /> : null}
-            {activeView === 'notes' ? (
-              <Suspense fallback={<div className="view-loading">Loading notes workspace…</div>}>
-                <NotesWorkspace />
-              </Suspense>
-            ) : null}
           </section>
-          <WorkspacePanel />
+          <AssistantPanel />
         </div>
       </section>
     </main>
