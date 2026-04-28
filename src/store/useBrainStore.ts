@@ -139,6 +139,7 @@ function createStarterVault(name = 'MindMap'): BrainVault {
       theme: 'system',
       aiProvider: 'none',
       defaultMapLayout: 'organic',
+      edgeStyle: 'curved',
     },
   };
 }

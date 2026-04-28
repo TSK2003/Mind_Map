@@ -193,10 +193,12 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 310px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .primary-pane {
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   border-right: 1px solid var(--line);
 }
@@ -502,15 +504,19 @@
 
 @media (max-width: 1180px) {
   .workspace-grid {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
+
+@media (max-width: 900px) {
+  .workspace-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .assistant-panel {
     display: none;
   }
-}
 
-@media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 54px minmax(0, 1fr);
   }

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { MindMapCanvas } from '../components/canvas/MindMapCanvas';
+import { FlowchartCanvas } from '../components/canvas/FlowchartCanvas';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Topbar } from '../components/layout/Topbar';
 import { useBrainStore } from '../store/useBrainStore';
@@ -20,6 +21,7 @@ export function AppShell() {
         <div className="workspace-grid">
           <section className="primary-pane">
             {activeView === 'map' ? <MindMapCanvas /> : null}
+            {activeView === 'flowchart' ? <FlowchartCanvas /> : null}
             {activeView === 'notes' ? (
               <Suspense fallback={<div className="view-loading">Loading notes workspace…</div>}>
                 <NotesWorkspace />

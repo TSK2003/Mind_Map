@@ -129,9 +129,10 @@
 .canvas-edge {
   fill: none;
   stroke: var(--teal);
-  stroke-opacity: 0.35;
+  stroke-opacity: 0.45;
   stroke-width: 2.4;
   stroke-linecap: round;
+  stroke-linejoin: round;
   transition: stroke-opacity var(--transition-fast), stroke-width var(--transition-fast);
 }
 
@@ -162,6 +163,8 @@
   transform-origin: top left;
   pointer-events: auto;
   will-change: transform, left, top;
+  backface-visibility: hidden;
+  -webkit-font-smoothing: subpixel-antialiased;
 }
 
 /* ── Brain Node Card ─────────────────────────────── */
@@ -219,6 +222,7 @@
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -306,10 +310,11 @@
 .node-attachment-preview img {
   width: 100%;
   height: auto;
-  max-height: 180px;
-  object-fit: contain;
+  max-height: 200px;
+  object-fit: cover;
   display: block;
   background: var(--surface);
+  image-rendering: auto;
 }
 
 .node-attachment-file {
@@ -614,6 +619,86 @@
   background: var(--rose);
 }
 
+/* ── Minimap ─────────────────────────────────────── */
+
+.canvas-minimap {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 5;
+  width: 180px;
+  height: 110px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  box-shadow: var(--brand-shadow);
+  overflow: hidden;
+  user-select: none;
+}
+
+.canvas-minimap svg {
+  display: block;
+  cursor: crosshair;
+}
+
+.minimap-zoom-controls {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+}
+
+.minimap-zoom-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.canvas-minimap:hover .minimap-zoom-controls button {
+  opacity: 1;
+}
+
+.minimap-zoom-controls button:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.minimap-edge {
+  stroke: var(--teal);
+  stroke-opacity: 0.4;
+  stroke-width: 1;
+}
+
+.minimap-node {
+  fill: var(--teal-soft);
+  stroke: var(--teal);
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+  cursor: pointer;
+}
+
+.minimap-node.is-selected {
+  fill: var(--teal);
+  stroke-opacity: 1;
+}
+
+.minimap-node:hover {
+  fill: var(--teal);
+  fill-opacity: 0.7;
+}
+
 /* ── Responsive Canvas ───────────────────────────── */
 
 @media (max-width: 768px) {
@@ -655,6 +740,13 @@
     padding: 0 5px;
   }
 
+  .canvas-minimap {
+    width: 120px;
+    height: 75px;
+    right: 8px;
+    bottom: 8px;
+  }
+
   .canvas-status {
     top: 8px;
     right: 8px;
@@ -665,3 +757,4 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+

@@ -6,7 +6,7 @@ import { useBrainStore } from './store/useBrainStore';
 
 const localVaultKey = 'mindmap:vault';
 const localChatSettingsKey = 'mindmap:chat-settings';
-const appTitle = 'MindMap';
+const appTitle = 'Aescion Mapping App';
 const localVaultPersistenceDelayMs = 700;
 const desktopAutosaveDelayMs = 1500;
 const localSettingsPersistenceDelayMs = 250;
@@ -60,6 +60,16 @@ export default function App() {
     }
     setHasHydrated(true);
   }, [setChatSettings, setVault]);
+
+  // Warn before closing browser tab (non-Electron)
+  useEffect(() => {
+    if (!hasHydrated) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasHydrated]);
 
   // Persist vault to localStorage
   useEffect(() => {

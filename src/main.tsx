@@ -6,6 +6,7 @@ import App from './App';
 import './styles/index.css';
 import './styles/layout.css';
 import './styles/canvas.css';
+import './styles/flowchart.css';
 import './styles/editor.css';
 import './styles/dialogs.css';
 import './styles/animations.css';

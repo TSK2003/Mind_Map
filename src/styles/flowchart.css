@@ -1,0 +1,274 @@
+/* ── Flowchart Canvas ────────────────────────────── */
+
+.fc-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.fc-shell.is-panning,
+.fc-shell.is-panning .fc-surface {
+  cursor: grabbing;
+}
+
+.fc-surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+}
+
+/* ── Flowchart Toolbar ───────────────────────────── */
+
+.fc-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100% - 28px);
+}
+
+.fc-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: var(--brand-shadow);
+  transition: all var(--transition-fast);
+}
+
+.fc-toolbar button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(34, 124, 114, 0.18);
+}
+
+.fc-toolbar button.is-danger { color: var(--rose); }
+.fc-toolbar button.is-danger:disabled { color: var(--muted); }
+
+.fc-sep {
+  width: 1px;
+  height: 24px;
+  align-self: center;
+  background: var(--line);
+  margin: 0 2px;
+}
+
+/* ── Flowchart Block ─────────────────────────────── */
+
+.fc-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 16px;
+  border: 2px solid var(--line-strong);
+  background: var(--surface-strong);
+  cursor: grab;
+  text-align: center;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.fc-block:hover {
+  box-shadow: 0 8px 24px rgba(36, 34, 31, 0.12);
+}
+
+.fc-block.is-selected {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-soft), 0 8px 24px rgba(34, 124, 114, 0.12);
+}
+
+/* ── Block Shapes ────────────────────────────────── */
+
+.fc-shape-rect {
+  border-radius: var(--radius);
+}
+
+.fc-shape-rounded {
+  border-radius: 28px;
+}
+
+.fc-shape-start-end {
+  border-radius: 28px;
+  background: linear-gradient(135deg, var(--teal-soft), var(--surface-strong));
+  border-color: var(--teal);
+}
+
+.fc-shape-diamond {
+  min-height: 80px;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  border: none;
+  background: var(--amber-soft);
+  padding: 20px 30px;
+}
+
+.fc-shape-diamond.is-selected {
+  background: var(--teal-soft);
+  box-shadow: none;
+}
+
+/* Parallelogram — I/O */
+.fc-shape-parallelogram {
+  border-radius: var(--radius);
+  transform: skewX(-12deg);
+  background: linear-gradient(135deg, var(--sky-soft), var(--surface-strong));
+  border-color: var(--sky);
+}
+
+.fc-shape-parallelogram .fc-label,
+.fc-shape-parallelogram .fc-label-input {
+  transform: skewX(12deg);
+}
+
+/* Hexagon — Preparation */
+.fc-shape-hexagon {
+  min-height: 60px;
+  clip-path: polygon(10% 0%, 90% 0%, 100% 50%, 90% 100%, 10% 100%, 0% 50%);
+  border: none;
+  background: var(--lime-soft);
+  padding: 10px 24px;
+}
+
+.fc-shape-hexagon.is-selected {
+  background: var(--teal-soft);
+}
+
+/* Cylinder — Database */
+.fc-shape-cylinder {
+  border-radius: var(--radius);
+  border-color: var(--violet);
+  background: linear-gradient(180deg, var(--violet-soft) 0%, var(--surface-strong) 30%, var(--surface-strong) 70%, var(--violet-soft) 100%);
+  min-height: 70px;
+  padding: 14px 16px;
+  position: relative;
+}
+
+.fc-shape-cylinder::before,
+.fc-shape-cylinder::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  height: 14px;
+  border: 2px solid var(--violet);
+  background: var(--violet-soft);
+}
+
+.fc-shape-cylinder::before {
+  top: -2px;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+
+.fc-shape-cylinder::after {
+  bottom: -2px;
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+}
+
+.fc-shape-cylinder.is-selected {
+  border-color: var(--teal);
+}
+
+.fc-shape-cylinder.is-selected::before,
+.fc-shape-cylinder.is-selected::after {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+/* Document */
+.fc-shape-document {
+  border-radius: var(--radius) var(--radius) 0 0;
+  border-bottom: none;
+  background: linear-gradient(180deg, var(--rose-soft), var(--surface-strong) 80%);
+  border-color: var(--rose);
+  padding-bottom: 18px;
+  position: relative;
+  clip-path: polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%);
+  min-height: 70px;
+}
+
+.fc-shape-document.is-selected {
+  border-color: var(--teal);
+}
+
+/* ── Block Label ─────────────────────────────────── */
+
+.fc-label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.fc-label-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--ink);
+  padding: 2px 4px;
+  border-bottom: 2px solid var(--teal);
+}
+
+/* ── Flowchart Edges ─────────────────────────────── */
+
+.fc-edge {
+  fill: none;
+  stroke: var(--ink);
+  stroke-opacity: 0.55;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.canvas-edge-group:hover .fc-edge {
+  stroke-opacity: 0.8;
+  stroke-width: 3;
+}
+
+.fc-arrow {
+  fill: var(--ink);
+  fill-opacity: 0.3;
+}
+
+.canvas-edge-group:hover .fc-arrow {
+  fill-opacity: 0.6;
+}
+
+/* ── Responsive ──────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .fc-toolbar button span {
+    display: none;
+  }
+
+  .fc-toolbar button {
+    padding: 0 8px;
+    min-height: 30px;
+  }
+}

@@ -407,6 +407,38 @@ function createWindow() {
     mainWindow?.show();
   });
 
+  // Close confirmation dialog
+  let forceClose = false;
+  mainWindow.on('close', (e) => {
+    if (forceClose) return;
+    e.preventDefault();
+    void (async () => {
+      const result = await dialog.showMessageBox(mainWindow!, {
+        type: 'question',
+        buttons: ['Save & Close', "Don't Save", 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+        title: 'Close MindMap',
+        message: 'Do you want to save your work before closing?',
+        detail: 'Any unsaved changes will be lost if you don\'t save.',
+      });
+      if (result.response === 0) {
+        // Save & Close — tell renderer to save, then close
+        mainWindow?.webContents.send('menu:save-vault');
+        // Give it a moment to save, then force close
+        setTimeout(() => {
+          forceClose = true;
+          mainWindow?.close();
+        }, 800);
+      } else if (result.response === 1) {
+        // Don't Save — just close
+        forceClose = true;
+        mainWindow?.close();
+      }
+      // Cancel (response === 2) — do nothing, window stays open
+    })();
+  });
+
   mainWindow.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
     void shell.openExternal(url);
     return { action: 'deny' };

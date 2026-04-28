@@ -1,4 +1,6 @@
-export type WorkspaceView = 'map' | 'notes' | 'graph' | 'tasks' | 'dashboard';
+export type WorkspaceView = 'map' | 'notes' | 'graph' | 'tasks' | 'dashboard' | 'flowchart';
+
+export type EdgeStyle = 'straight' | 'curved' | 'step';
 
 export type BlockType =
   | 'paragraph'
@@ -201,6 +203,7 @@ export interface BrainVault {
     theme: 'light' | 'dark' | 'system';
     aiProvider: ChatProvider;
     defaultMapLayout: MapDocument['layout'];
+    edgeStyle: EdgeStyle;
   };
 }
 

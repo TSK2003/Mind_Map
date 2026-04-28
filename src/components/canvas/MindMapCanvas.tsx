@@ -1,6 +1,6 @@
-import { Image, Maximize2, Plus, RotateCcw, Trash2, Waypoints, ZoomIn, ZoomOut } from 'lucide-react';
+import { Image, Maximize2, Minus, Plus, RotateCcw, Spline, Trash2, Waypoints, ZoomIn, ZoomOut } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MindMapEdge, MindMapNode } from '../../domain/types';
+import type { EdgeStyle, MindMapEdge, MindMapNode } from '../../domain/types';
 import { useBrainStore } from '../../store/useBrainStore';
 import { BrainNodeCard } from './BrainNodeCard';
 import { fileToDataUrl, pickFile } from './fileUtils';
@@ -89,11 +89,19 @@ function computeChildCounts(edges: MindMapEdge[]) {
   return counts;
 }
 
-function createEdgePath(source: MindMapNode, target: MindMapNode, vp: Viewport) {
+function createEdgePath(source: MindMapNode, target: MindMapNode, vp: Viewport, style: 'straight' | 'curved' | 'step' = 'curved') {
   const sx = toScreenX(source.position.x + NODE_WIDTH, vp);
   const sy = toScreenY(source.position.y + NODE_HEIGHT / 2, vp);
   const ex = toScreenX(target.position.x, vp);
   const ey = toScreenY(target.position.y + NODE_HEIGHT / 2, vp);
+  if (style === 'straight') {
+    return `M ${sx} ${sy} L ${ex} ${ey}`;
+  }
+  if (style === 'step') {
+    const midX = (sx + ex) / 2;
+    return `M ${sx} ${sy} L ${midX} ${sy} L ${midX} ${ey} L ${ex} ${ey}`;
+  }
+  // curved (default)
   const dx = Math.abs(ex - sx);
   const offset = Math.max(60, dx * 0.4);
   return `M ${sx} ${sy} C ${sx + offset} ${sy}, ${ex - offset} ${ey}, ${ex} ${ey}`;
@@ -112,6 +120,8 @@ export function MindMapCanvas() {
   const updateMindNode = useBrainStore((s) => s.updateMindNode);
   const deleteMindNode = useBrainStore((s) => s.deleteMindNode);
   const clearMindMap = useBrainStore((s) => s.clearMindMap);
+  const edgeStyle = useBrainStore((s) => s.vault.settings.edgeStyle ?? 'curved');
+  const updateSettings = useBrainStore((s) => s.updateSettings);
 
   const shellRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<Viewport>({ x: 120, y: 120, zoom: 1 });
@@ -301,12 +311,10 @@ export function MindMapCanvas() {
     return () => cancelAnimationFrame(frameId);
   }, [fitToNodes, vaultLoadVersion]);
 
-  // Center on selected node change
+  // Track selected node (no auto-centering — user controls viewport)
   useEffect(() => {
-    if (!selectedMapNodeId) { lastSelectedRef.current = selectedMapNodeId; return; }
-    if (lastSelectedRef.current !== selectedMapNodeId) centerOnNode(selectedMapNodeId);
     lastSelectedRef.current = selectedMapNodeId;
-  }, [centerOnNode, selectedMapNodeId]);
+  }, [selectedMapNodeId]);
 
   // Clean up stale pending connections
   useEffect(() => {
@@ -388,6 +396,14 @@ export function MindMapCanvas() {
           <Maximize2 size={15} />
           <span>Fit</span>
         </button>
+        <button type="button" title={`Wire: ${edgeStyle}`} aria-label="Toggle wire style" onClick={() => {
+          const styles: EdgeStyle[] = ['curved', 'straight', 'step'];
+          const next = styles[(styles.indexOf(edgeStyle) + 1) % styles.length];
+          updateSettings({ edgeStyle: next });
+        }}>
+          <Spline size={15} />
+          <span>{edgeStyle === 'curved' ? 'Curved' : edgeStyle === 'straight' ? 'Line' : 'Step'}</span>
+        </button>
         <span className="toolbar-separator" />
         <button className="is-danger" type="button" title="Delete selected" aria-label="Delete selected" disabled={!canDeleteSelected}
           onClick={() => { if (selectedNode) deleteMindNode(selectedNode.id); }}
@@ -419,7 +435,7 @@ export function MindMapCanvas() {
         onPointerDown={(e) => {
           if (e.button !== 0) return;
           const t = e.target as HTMLElement | null;
-          if (t?.closest('.canvas-node, .canvas-toolbar, .canvas-zoom-controls')) return;
+          if (t?.closest('.canvas-node, .canvas-toolbar, .canvas-zoom-controls, .canvas-info-panel, .canvas-minimap')) return;
           panRef.current = {
             startClientX: e.clientX, startClientY: e.clientY,
             originX: viewportRef.current.x, originY: viewportRef.current.y,
@@ -429,7 +445,7 @@ export function MindMapCanvas() {
         }}
         onDoubleClick={(e) => {
           const t = e.target as HTMLElement | null;
-          if (t?.closest('.canvas-node, .canvas-toolbar, .canvas-zoom-controls')) return;
+          if (t?.closest('.canvas-node, .canvas-toolbar, .canvas-zoom-controls, .canvas-info-panel, .canvas-minimap')) return;
           const shell = shellRef.current;
           if (!shell) return;
           addNodeAt(toWorldPosition(e.clientX, e.clientY, shell.getBoundingClientRect(), viewportRef.current));
@@ -463,12 +479,12 @@ export function MindMapCanvas() {
             return (
               <g key={edge.id} className="canvas-edge-group">
                 <path
-                  d={createEdgePath(source, target, viewport)}
+                  d={createEdgePath(source, target, viewport, edgeStyle)}
                   className={edge.animated ? 'canvas-edge is-animated' : 'canvas-edge'}
                 />
                 {/* Invisible wider hit area for clicking */}
                 <path
-                  d={createEdgePath(source, target, viewport)}
+                  d={createEdgePath(source, target, viewport, edgeStyle)}
                   className="canvas-edge-hitarea"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -592,6 +608,82 @@ export function MindMapCanvas() {
           <span className="canvas-info-value">{map.edges.length}</span>
         </div>
       </div>
+
+      {/* Minimap preview */}
+      {visibleNodes.length > 0 ? (() => {
+        const bounds = getNodeBounds(visibleNodes);
+        const bw = Math.max(bounds.maxX - bounds.minX, NODE_WIDTH);
+        const bh = Math.max(bounds.maxY - bounds.minY, NODE_HEIGHT);
+        const mmW = 180;
+        const mmH = 110;
+        const pad = 12;
+        const scale = Math.min((mmW - pad * 2) / bw, (mmH - pad * 2) / bh);
+        const ox = (mmW - bw * scale) / 2 - bounds.minX * scale;
+        const oy = (mmH - bh * scale) / 2 - bounds.minY * scale;
+        return (
+          <div
+            className="canvas-minimap"
+            aria-label="Canvas minimap"
+            onWheel={(e) => {
+              e.stopPropagation();
+              const dy = normalizeWheelDistance(e.deltaY, e.deltaMode);
+              zoomAtPoint(viewportRef.current.zoom * Math.exp(-dy * 0.005));
+            }}
+            onClick={(e) => {
+              const svgRect = e.currentTarget.getBoundingClientRect();
+              const clickX = e.clientX - svgRect.left;
+              const clickY = e.clientY - svgRect.top;
+              const worldX = (clickX - ox) / scale;
+              const worldY = (clickY - oy) / scale;
+              const shell = shellRef.current;
+              if (!shell) return;
+              const rect = shell.getBoundingClientRect();
+              const z = viewportRef.current.zoom;
+              setViewport((v) => ({
+                ...v,
+                x: rect.width / 2 - worldX * z,
+                y: rect.height / 2 - worldY * z,
+              }));
+            }}
+          >
+            <div className="minimap-zoom-controls">
+              <button type="button" title="Zoom in" onClick={(e) => { e.stopPropagation(); zoomAtPoint(viewport.zoom * 1.2); }}>
+                <Plus size={10} />
+              </button>
+              <button type="button" title="Zoom out" onClick={(e) => { e.stopPropagation(); zoomAtPoint(viewport.zoom * 0.8); }}>
+                <Minus size={10} />
+              </button>
+            </div>
+            <svg width={mmW} height={mmH}>
+              {visibleEdges.map((edge) => {
+                const s = nodeById.get(edge.source);
+                const t = nodeById.get(edge.target);
+                if (!s || !t) return null;
+                const x1 = ox + (s.position.x + NODE_WIDTH / 2) * scale;
+                const y1 = oy + (s.position.y + NODE_HEIGHT / 2) * scale;
+                const x2 = ox + (t.position.x + NODE_WIDTH / 2) * scale;
+                const y2 = oy + (t.position.y + NODE_HEIGHT / 2) * scale;
+                return <line key={edge.id} x1={x1} y1={y1} x2={x2} y2={y2} className="minimap-edge" />;
+              })}
+              {visibleNodes.map((node) => {
+                const nx = ox + node.position.x * scale;
+                const ny = oy + node.position.y * scale;
+                const nw = NODE_WIDTH * scale;
+                const nh = NODE_HEIGHT * scale;
+                return (
+                  <rect
+                    key={node.id}
+                    x={nx} y={ny} width={nw} height={nh}
+                    rx={2}
+                    className={node.id === selectedNode?.id ? 'minimap-node is-selected' : 'minimap-node'}
+                    onClick={(ev) => { ev.stopPropagation(); selectNode(node.id); }}
+                  />
+                );
+              })}
+            </svg>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }

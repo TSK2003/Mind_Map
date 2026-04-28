@@ -260,5 +260,6 @@ export const sampleVault: BrainVault = {
     theme: 'system',
     aiProvider: 'none',
     defaultMapLayout: 'organic',
+    edgeStyle: 'curved',
   },
 };
