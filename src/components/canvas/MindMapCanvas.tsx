@@ -137,6 +137,7 @@ export function MindMapCanvas() {
   const [pendingConnectionSourceId, setPendingConnectionSourceId] = useState<string>();
   const [draggingNodeId, setDraggingNodeId] = useState<string>();
   const [isPanning, setIsPanning] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
 
   useEffect(() => { viewportRef.current = viewport; }, [viewport]);
   useEffect(() => { mapRef.current = map; }, [map]);
@@ -319,6 +320,47 @@ export function MindMapCanvas() {
     lastSelectedRef.current = selectedMapNodeId;
   }, [selectedMapNodeId]);
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        const activeTag = document.activeElement?.tagName.toLowerCase();
+        if (activeTag === 'input' || activeTag === 'textarea') return;
+        
+        const selected = lastSelectedRef.current;
+        if (selected && mapRef.current.nodes[0]?.id !== selected) {
+          deleteMindNode(selected);
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleteMindNode]);
+
+  const handleCopy = useCallback((nodeId: string) => {
+    const node = mapRef.current.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    localStorage.setItem('mindmap-clipboard', JSON.stringify(node));
+    setContextMenu(null);
+  }, []);
+
+  const handlePaste = useCallback((x: number, y: number) => {
+    setContextMenu(null);
+    try {
+      const clip = localStorage.getItem('mindmap-clipboard');
+      if (!clip) return;
+      const nodeData = JSON.parse(clip) as MindMapNode;
+      const shell = shellRef.current;
+      if (!shell) return;
+      const rect = shell.getBoundingClientRect();
+      const world = toWorldPosition(x, y, rect, viewportRef.current);
+      
+      const newNodeId = addMindNode(nodeData.data.label, nodeData.data.summary, world);
+      if (nodeData.data.tone) {
+        updateMindNode(newNodeId, { tone: nodeData.data.tone });
+      }
+    } catch {}
+  }, [addMindNode, updateMindNode]);
+
   // Clean up stale pending connections
   useEffect(() => {
     if (pendingConnectionSourceId && !nodeById.has(pendingConnectionSourceId)) {
@@ -379,7 +421,25 @@ export function MindMapCanvas() {
   }, [updateMapNodes, updateViewportFromMinimap]);
 
   return (
-    <div className={isPanning ? 'canvas-shell is-panning' : 'canvas-shell'} ref={shellRef}>
+    <div className={isPanning ? 'canvas-shell is-panning' : 'canvas-shell'} ref={shellRef} onClick={() => setContextMenu(null)}>
+      {contextMenu ? (
+        <div style={{
+          position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999,
+          background: 'var(--surface-strong)', border: '1px solid var(--line)', borderRadius: '6px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '4px', minWidth: '120px', display: 'flex', flexDirection: 'column', gap: '2px'
+        }}>
+          {contextMenu.nodeId && (
+            <button className="settings-option" onClick={() => handleCopy(contextMenu.nodeId!)} style={{ border: 'none', minHeight: '32px' }}>Copy</button>
+          )}
+          <button className="settings-option" onClick={() => handlePaste(contextMenu.x, contextMenu.y)} style={{ border: 'none', minHeight: '32px' }}>Paste</button>
+          {contextMenu.nodeId && (
+            <button className="settings-option" onClick={() => {
+              if (contextMenu.nodeId) deleteMindNode(contextMenu.nodeId);
+              setContextMenu(null);
+            }} style={{ border: 'none', minHeight: '32px', color: 'var(--rose)' }}>Delete</button>
+          )}
+        </div>
+      ) : null}
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -446,6 +506,10 @@ export function MindMapCanvas() {
       <div
         className={draggingNodeId ? 'canvas-surface is-dragging-node' : 'canvas-surface'}
         onPointerDown={(e) => {
+          if (e.button === 2) {
+            setContextMenu({ x: e.clientX, y: e.clientY });
+            return;
+          }
           if (e.button !== 0) return;
           const t = e.target as HTMLElement | null;
           if (t?.closest('.canvas-node, .canvas-toolbar, .canvas-zoom-controls, .canvas-info-panel, .canvas-minimap')) return;
@@ -455,7 +519,9 @@ export function MindMapCanvas() {
           };
           setIsPanning(true);
           setPendingConnectionSourceId(undefined);
+          setContextMenu(null);
         }}
+        onContextMenu={(e) => e.preventDefault()}
         onDoubleClick={(e) => {
           const t = e.target as HTMLElement | null;
           if (t?.closest('.canvas-node, .canvas-toolbar, .canvas-zoom-controls, .canvas-info-panel, .canvas-minimap')) return;
@@ -537,6 +603,7 @@ export function MindMapCanvas() {
             <div
               key={node.id}
               className="canvas-node-positioner"
+              onContextMenu={(e) => e.preventDefault()}
               style={{
                 left: toScreenX(node.position.x, viewport),
                 top: toScreenY(node.position.y, viewport),
@@ -550,6 +617,13 @@ export function MindMapCanvas() {
                 childCount={childCounts.get(node.id) ?? 0}
                 hasParentEdge={parentEdgeMap.has(node.id)}
                 onPointerDown={(e) => {
+                  if (e.button === 2) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    selectNode(node.id);
+                    setContextMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
+                    return;
+                  }
                   const t = e.target as HTMLElement | null;
                   if (e.button !== 0 || t?.closest('button, input, textarea, a')) return;
                   e.preventDefault();
@@ -561,6 +635,7 @@ export function MindMapCanvas() {
                     originX: node.position.x, originY: node.position.y,
                   };
                   setDraggingNodeId(node.id);
+                  setContextMenu(null);
                 }}
                 onSelect={() => {
                   if (pendingConnectionSourceId && pendingConnectionSourceId !== node.id) {

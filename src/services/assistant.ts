@@ -142,7 +142,7 @@ export function createAgentResult(
     body: textResponse?.body?.trim() || fallback,
     provider: textResponse?.provider ?? 'local',
     model: textResponse?.model,
-    actions: textResponse?.actions?.length ? textResponse.actions : actions,
+    actions: textResponse ? (textResponse.actions ?? []) : actions,
     createdAt: new Date().toISOString(),
     applied: false,
   } satisfies AgentResult;

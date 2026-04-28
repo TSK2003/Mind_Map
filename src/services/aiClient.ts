@@ -128,7 +128,7 @@ export async function callOpenAI(
   const apiKey = chatSettings.apiKey.trim();
   const model = chatSettings.model.trim();
 
-  if (!baseUrl || !apiKey || !model) {
+  if (!baseUrl || !model) {
     return null;
   }
 
@@ -140,21 +140,31 @@ export async function callOpenAI(
   const timeout = setTimeout(() => controller.abort(), 30000);
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const isGPT55 = model.startsWith('gpt-5.5');
+    const endpoint = isGPT55 ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
+    const bodyPayload = isGPT55
+      ? { model, input: `${SYSTEM_PROMPT}${diagramHint}\n\nUser prompt: ${prompt}` }
+      : {
+          model,
+          temperature: 0.4,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT + diagramHint },
+            { role: 'user', content: prompt },
+          ],
+        };
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        temperature: 0.4,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT + diagramHint },
-          { role: 'user', content: prompt },
-        ],
-      }),
+      body: JSON.stringify(bodyPayload),
     });
 
     if (!response.ok) {
@@ -170,10 +180,11 @@ export async function callOpenAI(
 
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
+      output_text?: string;
       model?: string;
     };
 
-    const content = data.choices?.[0]?.message?.content?.trim();
+    const content = (isGPT55 ? data.output_text : data.choices?.[0]?.message?.content)?.trim();
     if (!content) {
       return {
         title: 'Empty response',

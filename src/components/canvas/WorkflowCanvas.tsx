@@ -138,6 +138,7 @@ export function WorkflowCanvas() {
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
 
   const { width: blockWidth, height: blockHeight } = getBlockSize();
   const tools = useMemo(() => getToolset(), []);
@@ -347,7 +348,7 @@ export function WorkflowCanvas() {
     setSelectedMapNode(node.id);
   }
 
-  function deleteSelected() {
+  const deleteSelected = useCallback(() => {
     if (!selectedId || selectedId === nodes[0]?.id) {
       return;
     }
@@ -357,7 +358,44 @@ export function WorkflowCanvas() {
     updateDiagramNodes('flowchart', nextNodes);
     updateDiagramEdges('flowchart', nextEdges);
     setSelectedMapNode(nextNodes[0]?.id);
-  }
+  }, [edges, nodes, selectedId, setSelectedMapNode, updateDiagramEdges, updateDiagramNodes]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        const activeTag = document.activeElement?.tagName.toLowerCase();
+        if (activeTag === 'input' || activeTag === 'textarea') return;
+        deleteSelected();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [deleteSelected]);
+
+  const handleCopy = useCallback((nodeId: string) => {
+    const node = nodeMap.get(nodeId);
+    if (!node) return;
+    localStorage.setItem('mindmap-clipboard', JSON.stringify(node));
+    setContextMenu(null);
+  }, [nodeMap]);
+
+  const handlePaste = useCallback((x: number, y: number) => {
+    setContextMenu(null);
+    try {
+      const clip = localStorage.getItem('mindmap-clipboard');
+      if (!clip) return;
+      const nodeData = JSON.parse(clip) as MindMapNode;
+      const world = toWorld(x, y);
+      
+      const newNode: MindMapNode = {
+        ...nodeData,
+        id: createNodeId(),
+        position: { x: world.x - blockWidth / 2, y: world.y - blockHeight / 2 }
+      };
+      updateDiagramNodes('flowchart', [...nodes, newNode]);
+      setSelectedMapNode(newNode.id);
+    } catch {}
+  }, [nodes, blockWidth, blockHeight, updateDiagramNodes, setSelectedMapNode, toWorld]);
 
   function computeEdgePath(source: MindMapNode, target: MindMapNode) {
     const sourceCenterX = source.position.x + blockWidth / 2;
@@ -429,7 +467,28 @@ export function WorkflowCanvas() {
     : null;
 
   return (
-    <div className={isPanning ? 'fc-shell is-panning' : 'fc-shell'} ref={shellRef}>
+    <div className={isPanning ? 'fc-shell is-panning' : 'fc-shell'} ref={shellRef} onClick={() => setContextMenu(null)}>
+      {contextMenu ? (
+        <div style={{
+          position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999,
+          background: 'var(--surface-strong)', border: '1px solid var(--line)', borderRadius: '6px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '4px', minWidth: '120px', display: 'flex', flexDirection: 'column', gap: '2px'
+        }}>
+          {contextMenu.nodeId && (
+            <button className="settings-option" onClick={() => handleCopy(contextMenu.nodeId!)} style={{ border: 'none', minHeight: '32px' }}>Copy</button>
+          )}
+          <button className="settings-option" onClick={() => handlePaste(contextMenu.x, contextMenu.y)} style={{ border: 'none', minHeight: '32px' }}>Paste</button>
+          {contextMenu.nodeId && (
+            <button className="settings-option" onClick={() => {
+              if (contextMenu.nodeId) {
+                setSelectedMapNode(contextMenu.nodeId);
+                setTimeout(() => deleteSelected(), 0);
+              }
+              setContextMenu(null);
+            }} style={{ border: 'none', minHeight: '32px', color: 'var(--rose)' }}>Delete</button>
+          )}
+        </div>
+      ) : null}
       <div className="fc-toolbar" aria-label="Flowchart tools">
         {tools.map((tool) => {
           const Icon = tool.icon;
@@ -475,6 +534,10 @@ export function WorkflowCanvas() {
       <div
         className="fc-surface"
         onPointerDown={(event) => {
+          if (event.button === 2) {
+            setContextMenu({ x: event.clientX, y: event.clientY });
+            return;
+          }
           if (event.button !== 0) {
             return;
           }
@@ -492,7 +555,9 @@ export function WorkflowCanvas() {
           };
           setIsPanning(true);
           setConnectFrom(null);
+          setContextMenu(null);
         }}
+        onContextMenu={(e) => e.preventDefault()}
         onDoubleClick={(event) => {
           const target = event.target as HTMLElement;
           if (target.closest('.fc-block, .fc-toolbar, .fc-zoom, .canvas-info-panel, .canvas-minimap')) {
@@ -583,6 +648,13 @@ export function WorkflowCanvas() {
                 <div
                   className={`fc-block ${shapeClass} ${isSelected ? 'is-selected' : ''}`}
                   onPointerDown={(event) => {
+                    if (event.button === 2) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setSelectedMapNode(node.id);
+                      setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id });
+                      return;
+                    }
                     if (event.button !== 0 || (event.target as HTMLElement).closest('input')) {
                       return;
                     }
@@ -597,7 +669,9 @@ export function WorkflowCanvas() {
                       ox: node.position.x,
                       oy: node.position.y,
                     };
+                    setContextMenu(null);
                   }}
+                  onContextMenu={(e) => e.preventDefault()}
                   onClick={() => {
                     if (connectFrom && connectFrom !== node.id) {
                       const exists = edges.some((edge) => edge.source === connectFrom && edge.target === node.id);

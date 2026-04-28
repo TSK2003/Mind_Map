@@ -35,30 +35,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   function applyProvider(provider: ChatProvider) {
-    if (provider === 'openai') {
-      updateChatSettings({
-        provider,
-        baseUrl: chatSettings.baseUrl.trim() && chatSettings.provider === 'openai' ? chatSettings.baseUrl : defaultOpenAIBaseUrl,
-        model: chatSettings.model.trim() && chatSettings.provider === 'openai' ? chatSettings.model : defaultOpenAIModel,
-      });
-      updateSettings({ aiProvider: provider });
-      return;
-    }
-
-    if (provider === 'local') {
-      updateChatSettings({
-        provider,
-        baseUrl: chatSettings.baseUrl.trim() && chatSettings.provider === 'local' ? chatSettings.baseUrl : defaultOllamaBaseUrl,
-        model: chatSettings.model.trim() && chatSettings.provider === 'local' ? chatSettings.model : 'llama3.2',
-      });
-      updateSettings({ aiProvider: provider });
-      return;
-    }
-
-    updateChatSettings({
-      provider: 'none',
-    });
-    updateSettings({ aiProvider: 'none' });
+    updateChatSettings({ provider });
+    updateSettings({ aiProvider: provider });
   }
 
   return (
@@ -72,9 +50,19 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <p>Configure appearance, diagram defaults, and chatbot access.</p>
             </div>
           </div>
-          <button className="settings-close" type="button" onClick={onClose}>
-            Close
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="settings-close" type="button" onClick={onClose}>
+              Cancel
+            </button>
+            <button 
+              className="settings-close" 
+              type="button" 
+              onClick={onClose}
+              style={{ background: 'var(--teal)', color: 'white', borderColor: 'var(--teal)' }}
+            >
+              Save Settings
+            </button>
+          </div>
         </div>
 
         <section className="settings-group">

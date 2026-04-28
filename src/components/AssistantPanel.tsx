@@ -11,8 +11,9 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { getProviderLabel } from '../domain/chat';
-import type { AgentResult, WorkspaceView } from '../domain/types';
+import type { AgentResult, AgentTextResponse, WorkspaceView } from '../domain/types';
 import { createAgentResult, describeActionPlan, planAgentActions } from '../services/assistant';
+import { callOpenAI } from '../services/aiClient';
 import { getDesktopApi } from '../services/desktop';
 import { useBrainStore } from '../store/useBrainStore';
 import { MapInspector } from './inspector/MapInspector';
@@ -95,16 +96,29 @@ export function AssistantPanel() {
       }
 
       const desktopApi = getDesktopApi();
-      const textResponse = desktopApi
-        ? await desktopApi.runAgent({
-            prompt: trimmed,
-            vault,
-            selectedPageId,
-            activeView,
-            actionPlan: describeActionPlan(actions),
-            chatSettings,
-          })
-        : undefined;
+      let textResponse: AgentTextResponse | undefined;
+
+      if (desktopApi) {
+        textResponse = await desktopApi.runAgent({
+          prompt: trimmed,
+          vault,
+          selectedPageId,
+          activeView,
+          actionPlan: describeActionPlan(actions),
+          chatSettings,
+        });
+      } else if (chatSettings.provider === 'openai' || chatSettings.provider === 'openai-compatible' || chatSettings.provider === 'local') {
+        const aiResult = await callOpenAI(trimmed, chatSettings, activeView === 'flowchart' ? 'flowchart' : 'map');
+        if (aiResult) {
+          textResponse = {
+            provider: chatSettings.provider,
+            title: aiResult.title,
+            body: aiResult.body,
+            actions: aiResult.actions,
+            model: aiResult.model,
+          };
+        }
+      }
 
       setReply(createAgentResult(trimmed, vault, actions, textResponse));
     } catch {
