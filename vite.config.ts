@@ -11,6 +11,7 @@ export default defineConfig({
       ignored: ['**/.tmp-*/**', '**/dist/**', '**/dist-electron/**', '**/release/**'],
     },
   },
+  base: './',
   build: {
     target: 'es2022',
     outDir: 'dist',

@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { KeyRound, Monitor, Moon, Server, Settings2, Sparkles, Sun } from 'lucide-react';
+import { KeyRound, Monitor, Moon, Server, Settings2, Sparkles, Sun, Cpu } from 'lucide-react';
 import { useEffect } from 'react';
 import { defaultOllamaBaseUrl, defaultOpenAIBaseUrl, defaultOpenAIModel } from '../../domain/chat';
 import type { BrainVault, ChatProvider } from '../../domain/types';
@@ -14,6 +14,7 @@ const themeOptions: Array<{ value: BrainVault['settings']['theme']; label: strin
 const providerOptions: Array<{ value: ChatProvider; label: string; icon: typeof Sparkles }> = [
   { value: 'openai', label: 'OpenAI', icon: Sparkles },
   { value: 'local', label: 'Ollama', icon: Server },
+  { value: 'openai-compatible', label: 'Custom API', icon: Cpu },
   { value: 'none', label: 'Offline', icon: KeyRound },
 ];
 
@@ -91,15 +92,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <section className="settings-group">
           <div className="settings-group-heading">
             <span>AI provider</span>
-            <strong>{chatSettings.provider === 'local' ? 'Ollama' : chatSettings.provider === 'openai' ? 'OpenAI' : 'Offline'}</strong>
+            <strong>{chatSettings.provider === 'local' ? 'Ollama' : chatSettings.provider === 'openai' ? 'OpenAI' : chatSettings.provider === 'openai-compatible' ? 'Custom API' : 'Offline'}</strong>
           </div>
           <div className="segmented-control" role="group" aria-label="AI provider">
             {providerOptions.map((option) => {
               const Icon = option.icon;
-              const isActive =
-                option.value === 'openai'
-                  ? chatSettings.provider === 'openai' || chatSettings.provider === 'openai-compatible'
-                  : chatSettings.provider === option.value;
+              const isActive = option.value === chatSettings.provider;
 
               return (
                 <button
